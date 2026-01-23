@@ -35,3 +35,10 @@
 - [x] 二次調校全站透明度係數，確保關鍵指標達到最高可讀性。
 ## v10.0.0 - The Convergence (已完成)
 - [x] 正式發表 v10 版本，宣告 UI 與交互邏輯穩定。
+
+## v10.1 - AI Workflow (已完成)
+- [x] 引入 `.agent/workflows` 自動化腳本支援。
+- [x] 建立快捷 Commit Workflow (`/commit`)。
+
+## v10.2 - Performance (已完成)
+- [x] 最佳化掃描效能，移除耗時的 LOC 讀取邏輯。

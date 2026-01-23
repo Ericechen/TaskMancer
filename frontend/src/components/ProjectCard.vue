@@ -381,7 +381,7 @@ function formatSize(bytes?: number): string {
         
         <!-- Technical Metrics -->
         <div v-if="project.metrics" class="flex items-center space-x-2.5 text-[9px] font-mono text-secondary/80 italic">
-            <span>{{ formatNumber(project.metrics.loc) }} loc</span>
+            <!-- <span>{{ formatNumber(project.metrics.loc) }} loc</span> -->
             <span>{{ formatSize(project.metrics.size) }}</span>
             <span>{{ project.metrics.fileCount }} files</span>
         </div>

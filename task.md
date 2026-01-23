@@ -176,8 +176,10 @@
 - [x] 正式同步 package.json 與 UI 版本號
 
 
-## v10.0.1 - Git Watcher Fix (已完成)
-- [x] 修正 `watcher_service.py` 排除 `.git` 資料夾導致 commit 後不刷新的問題
-- [x] 允許 Git `index` 與 `HEAD` 變更觸發 UI 即時刷新
+## v10.1.0 - Workflow Automation (已完成)
+- [x] 為 TaskMancer 建立自動化 Commit Workflow (`.agent/workflows/commit.md`)
+
+## v10.2.0 - Performance Optimization (已完成)
+- [x] 移除實時 LOC (Lines of Code) 計算，大幅減少專案載入時的檔案 I/O 壓力。
 
 [Link]: https://github.com/Ericechen/TaskMancer

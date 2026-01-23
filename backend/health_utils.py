@@ -49,12 +49,8 @@ class HealthChecker:
                         lang = track_extensions[ext]
                         lang_dist[lang] = lang_dist.get(lang, 0) + 1
                         
-                        try:
-                            # Quick LOC estimate
-                            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                                total_loc += sum(1 for _ in f)
-                        except:
-                            pass
+                        # LOC calculation removed for performance
+                        pass
                     
                     total_files += 1
                     try:
