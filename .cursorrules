@@ -1,0 +1,25 @@
+# TaskMancer Project Rules (v1.1)
+
+## Language & Tone
+- **Primary Language**: Traditional Chinese (繁體中文)
+- **Tone**: Professional, Expert.
+
+## Tech Stack
+- **Backend**: Python 3.9+, FastAPI
+    - **Scanning**: Recursive `pathlib` with `max_depth=2`.
+    - **Watcher**: `watchdog` with **Debounce (500ms)** for Atomic Save support.
+    - **Parser**: Indentation-aware (Tree Structure).
+- **Frontend**: Vue.js 3, Vite, Tailwind CSS
+    - **State**: Pinia (Store).
+    - **Components**: Recursive `TaskTree` component.
+    - **Layout**: Grid View for multiple projects.
+
+## Constraints & Requirements
+- **Multi-Project**: Must scan root for multiple `task.md` files.
+- **Nested Tasks**: Support at least 3 levels of nesting.
+- **Progress Calculation**: Leaf nodes only.
+- **Performance**: Ignore `node_modules`, `.git`.
+
+## Workflow
+- Always update `task.md` when completing a step.
+- Ensure `implementation_plan.md` matches the code structure.
