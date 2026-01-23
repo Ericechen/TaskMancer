@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useProjectStore } from './stores/projectStore'
-import ProjectCard from './components/ProjectCard.vue'
+import ProjectList from './components/ProjectList.vue'
+import DashboardView from './components/DashboardView.vue'
 
 const store = useProjectStore()
 const showAddModal = ref(false)
+const currentView = ref<'dashboard' | 'projects'>('dashboard')
 
 // Discovery Logic
 const modalStep = ref<'input' | 'results'>('input')
@@ -77,8 +79,8 @@ async function handleImport() {
 <template>
   <div class="min-h-screen bg-slate-900 text-slate-50 p-6 font-sans">
     <!-- Header -->
-    <header class="flex justify-between items-center mb-10 max-w-7xl mx-auto">
-      <div class="flex items-center space-x-3">
+    <header class="flex flex-col md:flex-row justify-between items-center mb-8 max-w-7xl mx-auto gap-4">
+      <div class="flex items-center space-x-3 self-start md:self-auto">
         <div class="w-10 h-10 bg-gradient-to-br from-sky-500 to-indigo-600 rounded-lg shadow-lg shadow-sky-500/20 flex items-center justify-center text-xl font-bold">
             TM
         </div>
@@ -87,7 +89,25 @@ async function handleImport() {
         </h1>
       </div>
 
-      <div class="flex items-center space-x-4">
+      <!-- Navigation Tabs -->
+      <div class="bg-slate-800 p-1 rounded-lg flex space-x-1 border border-slate-700 shadow-sm">
+          <button 
+            @click="currentView = 'dashboard'"
+            :class="currentView === 'dashboard' ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-slate-200'"
+            class="px-4 py-1.5 rounded-md text-sm font-medium transition-all"
+          >
+            Dashboard
+          </button>
+          <button 
+             @click="currentView = 'projects'"
+            :class="currentView === 'projects' ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-slate-200'"
+            class="px-4 py-1.5 rounded-md text-sm font-medium transition-all"
+          >
+            Projects
+          </button>
+      </div>
+
+      <div class="flex items-center space-x-4 self-end md:self-auto">
         <!-- Add Project Button -->
         <button 
           @click="openModal"
@@ -120,18 +140,11 @@ async function handleImport() {
 
     <!-- Content -->
     <main class="max-w-7xl mx-auto">
-      <!-- Empty State -->
-      <div v-if="store.projects.length === 0 && store.isConnected" class="text-center py-20 text-slate-500">
-         <p class="text-lg mb-2">No projects monitored yet.</p>
-         <p class="text-sm">Click "Add Projects" to scan and import your task projects.</p>
-      </div>
-
-      <!-- Grid -->
-      <div v-else class="columns-1 md:columns-2 lg:columns-3 gap-6 space-y-6">
-        <div v-for="project in store.projects" :key="project.path" class="break-inside-avoid">
-            <ProjectCard :project="project" />
-        </div>
-      </div>
+        <transition name="fade" mode="out-in">
+             <KeepAlive>
+                <component :is="currentView === 'dashboard' ? DashboardView : ProjectList" />
+             </KeepAlive>
+        </transition>
     </main>
 
     <!-- Discovery Modal -->
@@ -251,3 +264,15 @@ async function handleImport() {
     </div>
   </div>
 </template>
+
+<style>
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+</style>

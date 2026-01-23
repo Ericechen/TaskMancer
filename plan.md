@@ -1,37 +1,44 @@
-# v1.5 - Usability Improvements
+# v2.0 - Analytics Dashboard
 
 ## Goal Description
-Enhance user experience by allowing project removal, preventing duplicate imports, and persisting the discovery root path in the backend configuration.
+Implement a high-level "Dashboard" view to provide aggregated insights into all monitored projects. This will help users get a quick overview of their productivity and project states without diving into individual task lists.
+
+## User Review Required
+> [!NOTE]
+> **Database Decision**: For this phase (v2.0), we will **NOT** introduce a database. We will rely on real-time aggregation of the `task.md` files. This means we cannot show historical data (e.g., "Tasks completed yesterday"), but we can show current snapshots (e.g., "Total completed tasks"). This keeps the app lightweight and file-system based.
 
 ## Proposed Changes
 
-### Backend
-#### [MODIFY] [backend/main.py](file:///d:/Dev/TaskMancer/backend/main.py)
-- Update `ProjectManager`:
-    - Track `observer` watches to enable removal (`unschedule`).
-    - Update `load_projects` and `save_projects` to handle `discovery_root` field in `projects.json`.
-    - Add `remove_root(path)` method.
-- Add `DELETE /api/roots` endpoint.
-- Add `GET /api/config` endpoint (to get `discovery_root` and potentially other settings).
-
 ### Frontend
-#### [MODIFY] [frontend/src/stores/projectStore.ts](file:///d:/Dev/TaskMancer/frontend/src/stores/projectStore.ts)
-- Add `removeProject(path)` action.
-- Add `fetchConfig()` action to load `discoveryRoot`.
-- Update `addProject` or `setDiscoveryRoot` to sync `discoveryRoot` to backend (maybe via a specific config endpoint or just updating it when scanning).
+#### [MODIFY] [App.vue](file:///d:/Dev/TaskMancer/frontend/src/App.vue)
+- Introduce a simple Tab/Navigation system (e.g., "Dashboard" vs "Projects").
+- Move the current Project Grid into a separate component (e.g., `ProjectList.vue`) to clean up `App.vue`.
 
-#### [MODIFY] [frontend/src/App.vue](file:///d:/Dev/TaskMancer/frontend/src/App.vue)
-- In "Discovery Modal":
-    - Initial `discoveryPath` should come from store (fetched from backend).
-    - When rendering results, check if `store.projects` already contains the path.
-    - If contained: Disable checkbox and visually mark as "Added".
+#### [NEW] [DashboardView.vue](file:///d:/Dev/TaskMancer/frontend/src/components/DashboardView.vue)
+- **Stats Cards**:
+    - Total Projects
+    - Total Tasks (Completed / Total)
+    - Completion Rate (Global)
+- **Visuals**:
+    - **Donut Chart**: CSS/SVG-based chart showing Project Status breakdown (Not Started, In Progress, Done).
+        - *Logic*:
+            - **Not Started**: 0% progress.
+            - **In Progress**: 1% - 99% progress.
+            - **Done**: 100% progress.
+- **Top Projects List**:
+    - Top 3 projects by remaining tasks (Needs Focus).
 
-#### [MODIFY] [frontend/src/components/ProjectCard.vue](file:///d:/Dev/TaskMancer/frontend/src/components/ProjectCard.vue)
-- Add a "Delete/Remove" button (e.g., trash icon) in the header.
-- Connect to `store.removeProject`.
+#### [NEW] [DonutChart.vue](file:///d:/Dev/TaskMancer/frontend/src/components/DonutChart.vue)
+- A reusable component using SVG `stroke-dasharray` for lightweight rendering without heavy chart libraries (or use Chart.js if complexities arise, but SVG is preferred for simple donuts).
+
+### Backend
+- No significant backend changes required as the aggregation happens on the client-side data store.
 
 ## Verification Plan
+### Automated Tests
+- N/A (UI visual changes mostly).
+
 ### Manual Verification
-- **Persistence**: Restart backend, verify `discoveryRoot` is remembered.
-- **Deletion**: Add a project, delete it, ensure it disappears from UI and `projects.json`.
-- **Duplicate Prevention**: Scan a folder with already added projects. Verify checkboxes are disabled.
+- Check if aggregated numbers match individual project cards.
+- Verify chart renders correctly for edge cases (0 projects, all completed, etc.).
+- Switch tabs between Dashboard and Projects.

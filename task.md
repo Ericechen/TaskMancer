@@ -74,3 +74,18 @@
     - [x] Update `ProjectCard.vue` (Add Delete button)
 - [x] Verification
     - [x] Manual Test (Persistence & Deletion)
+
+## v2.0 - Analytics Dashboard
+- [x] Frontend Architecture
+    - [x] Refactor `App.vue` to support Tabs/Views (Dashboard vs Project List)
+    - [x] Extract current grid to `ProjectList.vue`
+- [x] Dashboard Components
+    - [x] Implement `DonutChart.vue` (SVG based)
+    - [x] Implement `DashboardView.vue` (Aggregated Stats)
+        - [x] Total Projects & Tasks
+        - [x] Status Categorization Logic
+    - [x] Integrate into Main View
+
+## v2.1 - Dashboard Refinements (Active)
+- [x] Filter "Needs Focus" list (Hide completed projects)
+- [x] Add "Quick Wins" widget (>75% completion)
