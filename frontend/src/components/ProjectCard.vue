@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { useProjectStore, type Project } from '../stores/projectStore'
 import TaskTree from './TaskTree.vue'
 import { $swal, Toast } from '../utils/swal'
+import { marked } from 'marked'
 
 const props = defineProps<{
   project: Project
@@ -116,6 +117,27 @@ async function handleFileChange(event: Event) {
         }
     }
 }
+
+async function handleInfo() {
+    try {
+        const content = await store.fetchReadme(props.project.path)
+        const html = await marked(content)
+        
+        $swal.fire({
+            title: `<span class="text-accent">${props.project.name}</span> README`,
+            html: `<div class="text-left prose prose-invert max-h-[60vh] overflow-y-auto text-sm custom-scrollbar pr-2">${html}</div>`,
+            width: '800px',
+            confirmButtonText: 'Close',
+            confirmButtonColor: '#8b5cf6',
+        })
+    } catch (e: any) {
+        $swal.fire({
+            icon: 'error',
+            title: 'Failed to load README',
+            text: e.message || 'Error occurred while fetching documentation'
+        })
+    }
+}
 </script>
 
 <template>
@@ -196,6 +218,7 @@ async function handleFileChange(event: Event) {
             <span>Antigravity</span>
         </button>
         <button 
+            v-if="project.hasStartBat"
             @click="handleCommand('dev')"
             :disabled="isRunningCommand"
             class="flex items-center space-x-2 text-[10px] font-bold text-emerald-400 hover:text-emerald-300 transition-colors bg-emerald-500/5 px-3 py-1.5 rounded-lg border border-emerald-500/10 hover:border-emerald-500/30"
@@ -205,6 +228,16 @@ async function handleFileChange(event: Event) {
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <span>Dev</span>
+        </button>
+        <button 
+            v-if="project.hasReadme"
+            @click="handleInfo"
+            class="flex items-center space-x-2 text-[10px] font-bold text-sky-400 hover:text-sky-300 transition-colors bg-sky-500/5 px-3 py-1.5 rounded-lg border border-sky-500/10 hover:border-sky-500/30"
+        >
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>Info</span>
         </button>
     </div>
 

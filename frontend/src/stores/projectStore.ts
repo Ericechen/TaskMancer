@@ -20,6 +20,8 @@ export interface Project {
   stats: ProjectStats;
   tasks: Task[];
   links: string[];
+  hasStartBat: boolean;
+  hasReadme: boolean;
 }
 
 export const useProjectStore = defineStore('project', () => {
@@ -203,6 +205,18 @@ export const useProjectStore = defineStore('project', () => {
     }
   }
 
+  async function fetchReadme(path: string) {
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/api/projects/readme?path=${encodeURIComponent(path)}`)
+      if (!response.ok) throw new Error('Failed to fetch README')
+      const data = await response.json()
+      return data.content
+    } catch (e) {
+      console.error(e)
+      throw e
+    }
+  }
+
   return { 
     projects, 
     isConnected, 
@@ -215,6 +229,7 @@ export const useProjectStore = defineStore('project', () => {
     fetchConfig, 
     createProject, 
     uploadProjectFile,
-    runCommand
+    runCommand,
+    fetchReadme
   }
 })

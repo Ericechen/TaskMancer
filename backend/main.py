@@ -165,13 +165,21 @@ class ProjectManager:
             projects_meta = scanner.scan()
             
             for meta in projects_meta:
+                path_obj = Path(meta['path'])
                 parsed = parser.parse_file(meta['task_file'])
+                
+                # Check for files (case-insensitive where possible)
+                has_start_bat = any(f.lower() == 'start.bat' for f in os.listdir(path_obj))
+                has_readme = any(f.lower() == 'readme.md' for f in os.listdir(path_obj))
+
                 all_projects_data.append({
                     "name": meta['name'],
                     "path": meta['path'],
                     "stats": parsed['stats'],
                     "tasks": parsed['tasks'],
-                    "links": parsed.get('links', [])
+                    "links": parsed.get('links', []),
+                    "hasStartBat": has_start_bat,
+                    "hasReadme": has_readme
                 })
         
         all_projects_data.sort(key=lambda x: x['name'])
@@ -251,6 +259,26 @@ async def upload_project_file(
         
     except Exception as e:
         logger.error(f"Error uploading file: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/projects/readme")
+async def get_project_readme(path: str):
+    try:
+        project_path = Path(path)
+        if not project_path.exists() or not project_path.is_dir():
+            raise HTTPException(status_code=400, detail="Invalid project path")
+            
+        # Find readme case-insensitively
+        readme_file = next((f for f in os.listdir(project_path) if f.lower() == 'readme.md'), None)
+        if not readme_file:
+            raise HTTPException(status_code=404, detail="README.md not found")
+            
+        with open(project_path / readme_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+            
+        return {"content": content}
+    except Exception as e:
+        logger.error(f"Error reading README: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 class CommandRequest(BaseModel):

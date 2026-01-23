@@ -63,5 +63,11 @@
 - [x] Backend: 忽略 H1 (#) 標題
 - [x] Backend: H2 (##) 作為任務容器，並修正列表項嵌套縮排
 
+## v5.0 - 工作站強化 (條件操作與資訊面板) (Active)
+- [ ] Backend: 自動偵測 `start.bat` 與 `README.md`
+- [ ] Backend: 實作 README 內容讀取 API
+- [ ] Frontend: 專案卡片條件顯示「Dev/Info」按鈕
+- [ ] Frontend: 實作 README Markdown 彈窗介面
+
 
 [Link]: https://github.com/Ericechen/TaskMancer
