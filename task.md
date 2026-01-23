@@ -102,3 +102,9 @@
     - [x] `ProjectCard.vue` (Border-based design)
     - [x] `DonutChart.vue` (Monochrome/Accent color scheme)
 
+## v2.6 - Project List Categorization (Completed)
+- [x] Implement Sectioned View in `ProjectList.vue`
+    - [x] Filter logic (Draft, Active, Completed)
+    - [x] Section Headers & Layout
+    - [x] Empty states for sections
+
