@@ -89,3 +89,16 @@
 ## v2.1 - Dashboard Refinements (Active)
 - [x] Filter "Needs Focus" list (Hide completed projects)
 - [x] Add "Quick Wins" widget (>75% completion)
+
+## v2.5 - Design Overhaul (Premium Minimalist)
+- [x] Config & Assets
+    - [x] Import Fonts (Outfit, Plus Jakarta Sans)
+    - [x] Update Tailwind Config (Void/Surface Palette)
+- [x] Global Styles
+    - [x] Update `style.css` (Base typography, animations)
+- [x] Component Reskin
+    - [x] `App.vue` (Header, Nav, Modal)
+    - [x] `DashboardView.vue` (Minimalist Stats, Donut)
+    - [x] `ProjectCard.vue` (Border-based design)
+    - [x] `DonutChart.vue` (Monochrome/Accent color scheme)
+

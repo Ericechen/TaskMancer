@@ -1,64 +1,57 @@
-# TaskMancer 實作計畫 (Implementation Plan) - v1.1
+# v2.5 - Design System Overhaul (Premium Minimalist)
 
-本階段將 TaskMancer 升級為「多專案戰情室」，支援遞迴掃描、巢狀任務解析與原子存檔容錯。
+## Goal Description
+Apply the `frontend-design` skill to transform TaskMancer into a **Premium Minimalist** experience.
+**Aesthetic Direction**: "Void & Light". A deep, immersive dark mode using mostly varying shades of black/gray, distinct typography (Outfit + Plus Jakarta Sans), and subtle but sharp interactions. Avoid generic "slate" cards.
 
 ## User Review Required
-
-> [!IMPORTANT]
-> **v1.1 架構變更**:
-> - **Backend**: 改為掃描 Root Path，支援多個 `task.md`。
-> - **Watcher**: 實作 Debounce 機制以處理 Atomic Save。
-> - **Frontend**: 改為 Card Grid 佈局，並使用遞迴組件渲染任務樹。
+> [!NOTE]
+> **Visual Change**: This will significantly darken the UI (from Slate-800/900 to nearly pure black) and remove "card" backgrounds in favor of borders and negative space. The vibe will be more "Developer Tool / Terminal" chic.
 
 ## Proposed Changes
 
-### Backend (Python/FastAPI)
+### Configuration
+#### [MODIFY] [index.html](file:///d:/Dev/TaskMancer/frontend/index.html)
+- Import Google Fonts: `Outfit` (Headings) and `Plus Jakarta Sans` (Body).
 
-#### [MODIFY] [main.py](file:///d:/Dev/TaskMancer/backend/main.py)
-- 新增 CLI 參數解析 (`argparse`) 接收 `--root`。
-- 初始化 `ProjectManager` 與 `RecursiveWatcher`。
-- WebSocket Payload 結構變更為 `{ projects: [...] }`。
+#### [MODIFY] [tailwind.config.js](file:///d:/Dev/TaskMancer/frontend/tailwind.config.js)
+- Define custom specific colors:
+    - `void`: `#050505` (Main BG)
+    - `surface`: `#121212` (Cards/Panels)
+    - `border`: `#2A2A2A` (Subtle borders)
+    - `primary`: `#F8FAFC` (High contrast text)
+    - `secondary`: `#94A3B8` (Muted text)
+    - `accent`: `#8B5CF6` (Violet - "Magic" feel)
+- Add animation keyframes (fade-in-up, subtle-scale).
 
-#### [NEW] [scanner.py](file:///d:/Dev/TaskMancer/backend/scanner.py)
-- 實作 `DirectoryScanner`。
-- 遞迴掃描目錄 (max_depth=2)。
-- 回傳包含 `task.md` 的專案路徑列表。
+### Styles
+#### [MODIFY] [style.css](file:///d:/Dev/TaskMancer/frontend/src/style.css)
+- Reset base styles.
+- Apply new font families.
+- Add utility classes for "glass" effects if needed (minimal usage).
 
-#### [NEW] [watcher_service.py](file:///d:/Dev/TaskMancer/backend/watcher_service.py)
-- 取代舊的 `watcher.py`。
-- 實作 `DebouncedEventHandler` (繼承自 `FileSystemEventHandler`)。
-- 處理 `on_any` 事件，過濾雜訊，延遲 500ms 後觸發重讀。
+### Components
+#### [MODIFY] [App.vue](file:///d:/Dev/TaskMancer/frontend/src/App.vue)
+- **Header**: Remove gradients. Use simple, bold typography.
+- **Tabs**: Switch to a "segmented control" or simple text links with active indicator.
+- **Layout**: Increase padding/gap.
 
-#### [MODIFY] [parser.py](file:///d:/Dev/TaskMancer/backend/parser.py)
-- 重寫解析邏輯，支援縮排 (Indentation) 偵測。
-- 建立樹狀結構 (Tree Structure)。
-- 計算邏輯：僅計算 Leaf Node 的完成度。
+#### [MODIFY] [DashboardView.vue](file:///d:/Dev/TaskMancer/frontend/src/components/DashboardView.vue)
+- **Stats**: Remove card backgrounds. Use big numbers with small labels directly on the grid.
+- **Charts**: Simplify Donut Chart colors to Monochrome or specific accent scales.
 
-### Frontend (Vue.js 3 + Pinia)
+#### [MODIFY] [ProjectList.vue](file:///d:/Dev/TaskMancer/frontend/src/components/ProjectList.vue)
+- Update grid spacing.
 
-#### [NEW] [stores/projectStore.js](file:///d:/Dev/TaskMancer/frontend/src/stores/projectStore.js)
-- 使用 Pinia 管理 `projects` 陣列。
-- 處理 WebSocket 接收到的全域狀態更新。
-
-#### [MODIFY] [Dashboard.vue](file:///d:/Dev/TaskMancer/frontend/src/components/Dashboard.vue)
-- 改為 Grid Layout 顯示 Project Cards。
-- 點擊 Card 彈出 Project Detail Modal。
-
-#### [NEW] [components/ProjectCard.vue](file:///d:/Dev/TaskMancer/frontend/src/components/ProjectCard.vue)
-- 顯示專案名稱、總進度條。
-
-#### [NEW] [components/TaskTree.vue](file:///d:/Dev/TaskMancer/frontend/src/components/TaskTree.vue)
-- 遞迴組件，渲染巢狀任務清單。
-- 根據 `level` 處理縮排樣式。
+#### [MODIFY] [ProjectCard.vue](file:///d:/Dev/TaskMancer/frontend/src/components/ProjectCard.vue)
+- **Redesign**:
+    - Remove heavy background.
+    - Use a 1px border.
+    - Show progress bar as a thin line.
+    - Focus on typography for the project name.
 
 ## Verification Plan
-
-### Automated Tests
-- **Tree Parser Test**: 測試多層縮排 Markdown 的解析正確性 (`test_parser_tree.py`)。
-- **Debounce Test**: 模擬快速連續的 File Create/Delete 事件，驗證是否只觸發一次解析。
-
 ### Manual Verification
-1. **多專案測試**: 準備一個測試目錄，包含 3 個子專案資料夾，各有 `task.md`。
-2. **啟動測試**: `python main.py --root /path/to/test_projects`。
-3. **Atomic Save 測試**: 使用 VS Code 編輯其中一個 `task.md` 並存檔，確認不會崩潰且 UI 正確更新。
-4. **巢狀渲染驗證**: 確認前端能正確顯示父子任務階層，且進度條計算正確。
+- Verify visual hierarchy is adequate without relying on heavy card backgrounds.
+- Check contrast ratios for accessibility.
+- Verify animations feel "premium" (smooth, not jumpy).

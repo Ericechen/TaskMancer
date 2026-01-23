@@ -77,69 +77,74 @@ async function handleImport() {
 </script>
 
 <template>
-  <div class="min-h-screen bg-slate-900 text-slate-50 p-6 font-sans">
+  <div class="min-h-screen p-8 md:p-12 font-sans selection:bg-accent/30">
     <!-- Header -->
-    <header class="flex flex-col md:flex-row justify-between items-center mb-8 max-w-7xl mx-auto gap-4">
-      <div class="flex items-center space-x-3 self-start md:self-auto">
-        <div class="w-10 h-10 bg-gradient-to-br from-sky-500 to-indigo-600 rounded-lg shadow-lg shadow-sky-500/20 flex items-center justify-center text-xl font-bold">
+    <header class="flex flex-col md:flex-row justify-between items-end mb-16 max-w-7xl mx-auto gap-6 border-b border-border pb-6 animate-fade-in-up">
+      <div class="flex items-center space-x-4 self-start md:self-auto group cursor-default">
+        <div class="w-12 h-12 bg-surface border border-border rounded-xl flex items-center justify-center text-2xl font-bold text-accent shadow-2xl shadow-accent/5 group-hover:shadow-accent/20 transition-all duration-500">
             TM
         </div>
-        <h1 class="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-sky-400 to-indigo-400">
-            TaskMancer
-        </h1>
+        <div>
+            <h1 class="text-3xl font-display font-bold text-primary tracking-tighter group-hover:text-accent transition-colors duration-300">
+                TaskMancer
+            </h1>
+            <p class="text-xs text-secondary font-mono mt-1 tracking-widest uppercase">Project Intelligence_v2.5</p>
+        </div>
       </div>
 
-      <!-- Navigation Tabs -->
-      <div class="bg-slate-800 p-1 rounded-lg flex space-x-1 border border-slate-700 shadow-sm">
+      <!-- Navigation Tabs (Segmented Control) -->
+      <div class="bg-surface p-1 rounded-lg flex space-x-1 border border-border">
           <button 
             @click="currentView = 'dashboard'"
-            :class="currentView === 'dashboard' ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-slate-200'"
-            class="px-4 py-1.5 rounded-md text-sm font-medium transition-all"
+            :class="currentView === 'dashboard' ? 'bg-void text-primary shadow-sm border border-border/50' : 'text-secondary hover:text-primary'"
+            class="px-6 py-2 rounded-md text-sm font-medium transition-all duration-300"
           >
             Dashboard
           </button>
           <button 
              @click="currentView = 'projects'"
-            :class="currentView === 'projects' ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-slate-200'"
-            class="px-4 py-1.5 rounded-md text-sm font-medium transition-all"
+            :class="currentView === 'projects' ? 'bg-void text-primary shadow-sm border border-border/50' : 'text-secondary hover:text-primary'"
+            class="px-6 py-2 rounded-md text-sm font-medium transition-all duration-300"
           >
             Projects
           </button>
       </div>
 
-      <div class="flex items-center space-x-4 self-end md:self-auto">
+      <div class="flex items-center space-x-6 self-end md:self-auto">
         <!-- Add Project Button -->
         <button 
           @click="openModal"
-          class="px-4 py-2 rounded bg-sky-600 hover:bg-sky-500 text-white text-sm font-medium transition-colors shadow-lg shadow-sky-900/20 flex items-center space-x-2"
+          class="group flex items-center space-x-2 text-sm font-medium text-secondary hover:text-accent transition-colors"
         >
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-          </svg>
-          <span>Add Projects</span>
+          <div class="w-8 h-8 rounded-full border border-dashed border-secondary flex items-center justify-center group-hover:border-accent group-hover:bg-accent/10 transition-all">
+             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+             </svg>
+          </div>
+          <span>Add Source</span>
         </button>
 
         <!-- Connection Status -->
-        <div class="flex items-center space-x-2 bg-slate-800 px-3 py-1.5 rounded-full border border-slate-700">
-          <span class="relative flex h-2.5 w-2.5">
+        <div class="flex items-center space-x-2">
+          <span class="relative flex h-2 w-2">
             <span 
               v-if="store.isConnected"
-              class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"
+              class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"
             ></span>
             <span 
               :class="store.isConnected ? 'bg-emerald-500' : 'bg-rose-500'"
-              class="relative inline-flex rounded-full h-2.5 w-2.5"
+              class="relative inline-flex rounded-full h-2 w-2"
             ></span>
           </span>
-          <span class="text-xs font-medium text-slate-300">
-              {{ store.isConnected ? 'Live' : 'Disconnected' }}
+          <span class="text-[10px] uppercase tracking-widest font-bold text-secondary">
+              {{ store.isConnected ? 'Online' : 'Offline' }}
           </span>
         </div>
       </div>
     </header>
 
     <!-- Content -->
-    <main class="max-w-7xl mx-auto">
+    <main class="max-w-7xl mx-auto animate-fade-in-up" style="animation-delay: 100ms;">
         <transition name="fade" mode="out-in">
              <KeepAlive>
                 <component :is="currentView === 'dashboard' ? DashboardView : ProjectList" />
@@ -148,52 +153,52 @@ async function handleImport() {
     </main>
 
     <!-- Discovery Modal -->
-    <div v-if="showAddModal" @click.self="showAddModal = false" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div class="bg-slate-800 rounded-xl p-6 w-full max-w-lg border border-slate-700 shadow-2xl flex flex-col max-h-[80vh]">
-        <div class="mb-4">
-            <h3 class="text-lg font-bold text-white">
-                {{ modalStep === 'input' ? 'Discover Projects' : 'Select Projects to Import' }}
+    <div v-if="showAddModal" @click.self="showAddModal = false" class="fixed inset-0 bg-void/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
+      <div class="bg-surface border border-border rounded-2xl p-8 w-full max-w-xl shadow-2xl relative overflow-hidden animate-subtle-scale">
+         <!-- Decorative Noise/Glow -->
+         <div class="absolute top-0 right-0 w-64 h-64 bg-accent/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
+
+        <div class="mb-8 relative z-10">
+            <h3 class="text-2xl font-display font-bold text-primary mb-2">
+                {{ modalStep === 'input' ? 'Initialize Discovery' : 'Select Sources' }}
             </h3>
-            <p v-if="modalStep === 'input'" class="text-xs text-slate-400 mt-1">
-                Enter a root directory to scan for 'task.md' files.
+            <p v-if="modalStep === 'input'" class="text-sm text-secondary">
+                Enter a root directory path to recursively scan for <code>task.md</code> contexts.
             </p>
         </div>
 
         <!-- Step 1: Input -->
-        <div v-if="modalStep === 'input'" class="flex flex-col space-y-4">
+        <div v-if="modalStep === 'input'" class="flex flex-col space-y-6 relative z-10">
             <div>
-                <label class="block text-xs font-medium text-slate-300 mb-1">Discovery Root</label>
+                <label class="block text-xs font-bold text-secondary uppercase tracking-widest mb-3">Root Path</label>
                 <input 
                   v-model="discoveryPath"
                   type="text" 
-                  placeholder="e.g. D:\Dev"
-                  class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-slate-200 focus:outline-none focus:border-sky-500"
+                  placeholder="D:\Development\Projects"
+                  class="w-full bg-void border border-border rounded-lg px-5 py-3 text-primary placeholder-zinc-700 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-all font-mono text-sm"
                   @keyup.enter="handleScan"
                 />
-            </div>
-            <div class="bg-slate-900/50 p-3 rounded text-xs text-slate-400 border border-slate-700/50">
-                <span class="font-bold text-sky-400">Note:</span> Only immediate subdirectories containing <code>task.md</code> will be found.
             </div>
         </div>
 
         <!-- Step 2: Results -->
-        <div v-else class="flex-1 overflow-y-auto min-h-0 space-y-2 pr-2 mb-4 custom-scrollbar">
+        <div v-else class="flex-1 overflow-y-auto min-h-0 space-y-2 pr-2 mb-8 custom-scrollbar max-h-[50vh] relative z-10">
              <div 
                 v-for="proj in discoveredProjects" 
                 :key="proj.path"
-                class="flex items-center p-3 rounded-lg border transition-colors"
+                class="flex items-center p-4 rounded-lg border transition-all duration-200 group"
                 :class="[
                     store.projects.some(p => p.path === proj.path) 
-                        ? 'bg-slate-800/50 border-slate-800 opacity-50 cursor-not-allowed' 
-                        : (selectedPaths.has(proj.path) ? 'bg-sky-900/20 border-sky-500/50 cursor-pointer' : 'bg-slate-900/50 border-slate-700 hover:border-slate-600 cursor-pointer')
+                        ? 'bg-void/50 border-transparent opacity-40 cursor-not-allowed' 
+                        : (selectedPaths.has(proj.path) ? 'bg-accent/10 border-accent/50 cursor-pointer' : 'bg-void border-border hover:border-zinc-600 cursor-pointer')
                 ]"
                 @click="!store.projects.some(p => p.path === proj.path) && toggleSelection(proj.path)"
              >
-                <div class="flex-shrink-0 mr-3">
+                <div class="flex-shrink-0 mr-4">
                     <div 
                         v-if="!store.projects.some(p => p.path === proj.path)"
                         class="w-5 h-5 rounded border flex items-center justify-center transition-colors"
-                        :class="selectedPaths.has(proj.path) ? 'bg-sky-500 border-sky-500' : 'border-slate-600'"
+                        :class="selectedPaths.has(proj.path) ? 'bg-accent border-accent' : 'border-zinc-700 group-hover:border-zinc-500'"
                     >
                         <svg v-if="selectedPaths.has(proj.path)" class="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
@@ -201,28 +206,28 @@ async function handleImport() {
                     </div>
                      <div 
                         v-else
-                        class="w-5 h-5 rounded border border-slate-700 bg-slate-800 flex items-center justify-center"
+                        class="w-5 h-5 flex items-center justify-center"
                     >
-                        <svg class="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg class="w-4 h-4 text-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                         </svg>
                     </div>
                 </div>
-                <div class="min-w-0">
-                    <div class="font-medium text-slate-200 truncate">{{ proj.name }}</div>
-                    <div class="text-xs text-slate-500 truncate">{{ proj.path }}</div>
+                <div class="min-w-0 flex-1">
+                    <div class="font-bold text-primary text-sm">{{ proj.name }}</div>
+                    <div class="text-xs text-secondary font-mono truncate opacity-60">{{ proj.path }}</div>
                 </div>
-                <div v-if="store.projects.some(p => p.path === proj.path)" class="ml-auto text-xs text-slate-500 font-medium px-2 py-0.5 border border-slate-700 rounded">
-                    Added
+                <div v-if="store.projects.some(p => p.path === proj.path)" class="ml-auto text-[10px] uppercase font-bold text-secondary tracking-wider">
+                    Linked
                 </div>
              </div>
         </div>
 
         <!-- Footer Buttons -->
-        <div class="flex justify-end space-x-2 mt-4 pt-4 border-t border-slate-700">
+        <div class="flex justify-end space-x-4 mt-8 pt-6 border-t border-border relative z-10">
           <button 
             @click="showAddModal = false"
-            class="px-4 py-2 rounded text-slate-400 hover:text-white transition-colors text-sm"
+            class="px-6 py-2.5 rounded-lg text-secondary hover:text-primary transition-colors text-sm font-medium"
           >
             Cancel
           </button>
@@ -231,26 +236,26 @@ async function handleImport() {
             v-if="modalStep === 'input'"
             @click="handleScan"
             :disabled="isScanning || !discoveryPath"
-            class="px-4 py-2 rounded bg-sky-600 hover:bg-sky-500 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm flex items-center space-x-2"
+            class="px-6 py-2.5 rounded-lg bg-primary hover:bg-white text-void disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm font-bold flex items-center space-x-2 shadow-lg shadow-white/5"
           >
             <svg v-if="isScanning" class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
-            <span>{{ isScanning ? 'Scanning...' : 'Scan' }}</span>
+            <span>{{ isScanning ? 'Scanning...' : 'Scan Directory' }}</span>
           </button>
 
-          <div v-else class="flex space-x-2">
+          <div v-else class="flex space-x-3">
              <button 
                 @click="modalStep = 'input'"
-                class="px-4 py-2 rounded text-slate-300 hover:bg-slate-700 transition-colors text-sm"
+                class="px-6 py-2.5 rounded-lg text-secondary hover:bg-void transition-colors text-sm font-medium border border-transparent hover:border-border"
               >
                 Back
              </button>
              <button 
                 @click="handleImport"
                 :disabled="isImporting || selectedPaths.size === 0"
-                class="px-4 py-2 rounded bg-sky-600 hover:bg-sky-500 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm flex items-center space-x-2"
+                class="px-6 py-2.5 rounded-lg bg-accent hover:bg-accent/90 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm font-bold flex items-center space-x-2 shadow-lg shadow-accent/20"
               >
                 <svg v-if="isImporting" class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -268,11 +273,12 @@ async function handleImport() {
 <style>
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.2s ease;
+  transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+  transform: translateY(5px);
 }
 </style>

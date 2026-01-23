@@ -8,9 +8,9 @@ const store = useProjectStore()
 <template>
   <div>
       <!-- Empty State -->
-      <div v-if="store.projects.length === 0 && store.isConnected" class="text-center py-20 text-slate-500">
-         <p class="text-lg mb-2">No projects monitored yet.</p>
-         <p class="text-sm">Click "Add Projects" to scan and import your task projects.</p>
+      <div v-if="store.projects.length === 0 && store.isConnected" class="text-center py-20">
+         <p class="text-lg mb-2 font-display text-primary">No projects monitored yet.</p>
+         <p class="text-sm text-secondary">Click "Add Source" to scan and import your task projects.</p>
       </div>
 
       <!-- Grid -->

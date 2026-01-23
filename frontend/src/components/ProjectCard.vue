@@ -21,12 +21,12 @@ async function handleDelete(path: string) {
 </script>
 
 <template>
-  <div class="bg-slate-800 rounded-xl p-4 shadow-lg border border-slate-700 flex flex-col h-full hover:border-sky-500 transition-colors duration-300 relative group">
+  <div class="bg-transparent border border-border p-5 flex flex-col h-full hover:border-accent/50 transition-colors duration-300 relative group rounded-xl">
     <!-- Delete Button (visible on hover) -->
     <button 
         @click="handleDelete(project.path)"
         :disabled="isDeleting"
-        class="absolute top-2 right-2 p-1.5 rounded-lg bg-slate-700/80 text-rose-400 opacity-0 group-hover:opacity-100 transition-all hover:bg-slate-600 hover:text-rose-300 disabled:opacity-50 z-10"
+        class="absolute top-4 right-4 text-border hover:text-danger opacity-0 group-hover:opacity-100 transition-all disabled:opacity-50 z-10"
         title="Remove Project"
     >
         <svg v-if="isDeleting" class="animate-spin w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -39,49 +39,50 @@ async function handleDelete(path: string) {
     </button>
 
     <!-- Header -->
-    <div class="flex justify-between items-start mb-4 pr-6">
-      <div class="overflow-hidden">
-        <h3 class="text-lg font-bold text-white tracking-tight truncate">{{ project.name }}</h3>
-        <p class="text-xs text-slate-400 font-mono truncate" :title="project.path">
-            {{ project.path }}
-        </p>
+    <div class="mb-6 pr-6">
+      <div class="flex items-center space-x-2 mb-1">
+          <div :class="['w-1.5 h-1.5 rounded-full', project.stats.percentage === 100 ? 'bg-success' : 'bg-accent']"></div>
+          <h3 class="text-lg font-display font-medium text-primary tracking-tight truncate">{{ project.name }}</h3>
       </div>
-      <div 
-        class="flex-shrink-0 ml-2"
-        :class="[
-          'px-2 py-0.5 rounded text-xs font-bold',
-          project.stats.percentage === 100 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-sky-500/10 text-sky-400'
-        ]"
-      >
-        {{ project.stats.percentage }}%
-      </div>
+      <p class="text-[10px] text-secondary font-mono truncate opacity-60 pl-3.5" :title="project.path">
+          {{ project.path }}
+      </p>
     </div>
 
-    <!-- Progress Bar -->
-    <div class="w-full bg-slate-700 rounded-full h-2 mb-4 overflow-hidden">
+    <!-- Stats Grid -->
+    <div class="flex items-baseline space-x-6 text-sm mb-4 pl-3.5">
+       <div class="flex flex-col">
+           <span class="text-[10px] text-secondary uppercase tracking-widest font-bold">Progress</span>
+           <span class="font-mono font-bold" :class="project.stats.percentage === 100 ? 'text-success' : 'text-primary'">{{ project.stats.percentage }}%</span>
+       </div>
+       <div class="flex flex-col">
+           <span class="text-[10px] text-secondary uppercase tracking-widest font-bold">Done</span>
+           <span class="font-mono text-secondary">{{ project.stats.completed }} / {{ project.stats.total }}</span>
+       </div>
+    </div>
+
+    <!-- Progress Line -->
+    <div class="w-full bg-border/30 h-[1px] mb-4 overflow-hidden relative">
       <div 
-        class="h-full rounded-full transition-all duration-500 ease-out"
-        :class="project.stats.percentage === 100 ? 'bg-emerald-500' : 'bg-sky-500'"
+        class="h-[1px] absolute top-0 left-0 transition-all duration-500 ease-out"
+        :class="project.stats.percentage === 100 ? 'bg-success' : 'bg-accent'"
         :style="{ width: `${project.stats.percentage}%` }"
       ></div>
-    </div>
-
-     <!-- Stats -->
-    <div class="flex space-x-4 text-xs text-slate-400 mb-4">
-       <span>Done: <strong class="text-slate-200">{{ project.stats.completed }}</strong></span>
-       <span>Total: <strong class="text-slate-200">{{ project.stats.total }}</strong></span>
     </div>
 
     <!-- Expandable Task List -->
     <div class="mt-auto">
         <button 
             @click="isOpen = !isOpen"
-            class="w-full py-2 px-3 rounded bg-slate-700 hover:bg-slate-600 text-xs text-slate-200 transition-colors flex items-center justify-center"
+            class="w-full py-2 rounded-lg border border-transparent hover:border-border text-xs text-secondary hover:text-primary transition-all flex items-center justify-center space-x-1"
         >
-            {{ isOpen ? 'Hide Tasks' : 'View Tasks' }}
+            <span>{{ isOpen ? 'Collapse' : 'Inspect' }}</span>
+            <svg class="w-3 h-3 transition-transform" :class="{ 'rotate-180': isOpen }" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            </svg>
         </button>
         
-        <div v-if="isOpen" class="mt-4 pt-4 border-t border-slate-700 max-h-60 overflow-y-auto custom-scrollbar">
+        <div v-if="isOpen" class="mt-4 pt-2 border-t border-border/50 max-h-60 overflow-y-auto custom-scrollbar">
             <TaskTree :tasks="project.tasks" />
         </div>
     </div>

@@ -21,9 +21,9 @@ const projectStatus = computed(() => {
     const inProgress = totalProjects.value - pending - done
     
     return [
-        { label: 'Pending', value: pending, color: '#94a3b8' }, // Slate 400
-        { label: 'In Progress', value: inProgress, color: '#0ea5e9' }, // Sky 500
-        { label: 'Done', value: done, color: '#10b981' } // Emerald 500
+        { label: 'Pending', value: pending, color: '#2A2A2A' }, // Border color (subtle)
+        { label: 'In Progress', value: inProgress, color: '#8B5CF6' }, // Accent
+        { label: 'Done', value: done, color: '#10B981' } // Success
     ]
 })
 
@@ -45,95 +45,97 @@ const quickWins = computed(() => {
 </script>
 
 <template>
-  <div class="space-y-6">
-    <!-- Top Stats Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-lg">
-            <h3 class="text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Total Statistics</h3>
+  <div class="space-y-12">
+    <!-- Top Stats Cards (Minimalist) -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-8 pb-12 border-b border-border/50">
+        <div class="group">
+            <h3 class="text-secondary text-[10px] font-bold uppercase tracking-widest mb-1 group-hover:text-accent transition-colors">Total Projects</h3>
             <div class="flex items-baseline space-x-2">
-                <span class="text-3xl font-bold text-white">{{ totalProjects }}</span>
-                <span class="text-xs text-slate-500">Projects</span>
+                <span class="text-6xl font-display font-light text-primary">{{ totalProjects }}</span>
+                <span class="text-sm font-mono text-secondary">Active</span>
             </div>
-            <div class="mt-2 text-xs text-slate-400">
-                <span class="text-sky-400 font-bold">{{ totalTasks }}</span> Tasks tracked
+            <div class="mt-2 text-xs text-secondary font-mono">
+                <span class="text-accent">{{ totalTasks }}</span> Tasks tracked
             </div>
         </div>
 
-        <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-lg">
-            <h3 class="text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Global Completion</h3>
+        <div class="group">
+            <h3 class="text-secondary text-[10px] font-bold uppercase tracking-widest mb-1 group-hover:text-accent transition-colors">Completion Rate</h3>
             <div class="flex items-baseline space-x-2">
-                <span class="text-3xl font-bold" :class="globalProgress === 100 ? 'text-emerald-400' : 'text-sky-400'">{{ globalProgress }}%</span>
-                <span class="text-xs text-slate-500">Done</span>
+                <span class="text-6xl font-display font-light" :class="globalProgress === 100 ? 'text-success' : 'text-primary'">{{ globalProgress }}%</span>
             </div>
-             <div class="w-full bg-slate-700 rounded-full h-1.5 mt-3 overflow-hidden">
+             <div class="w-24 bg-surface rounded-full h-1 mt-4 overflow-hidden">
                 <div 
-                    class="h-full rounded-full transition-all duration-500 ease-out"
-                    :class="globalProgress === 100 ? 'bg-emerald-500' : 'bg-sky-500'"
+                    class="h-full rounded-full transition-all duration-1000 ease-out"
+                    :class="globalProgress === 100 ? 'bg-success' : 'bg-accent'"
                     :style="{ width: `${globalProgress}%` }"
                 ></div>
             </div>
         </div>
         
-         <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-lg flex items-center justify-between relative overflow-hidden">
-             <!-- Decorative bg -->
-             <div class="absolute -right-6 -bottom-6 w-24 h-24 bg-indigo-500/10 rounded-full blur-xl"></div>
-             
-             <div class="z-10">
-                 <h3 class="text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Productivity Pulse</h3>
-                 <p class="text-xs text-slate-400 leading-relaxed max-w-[150px]">
-                     You have completed <strong class="text-emerald-400">{{ completedTasks }}</strong> tasks across all projects.
+         <div class="group relative overflow-hidden">
+             <div class="z-10 relative">
+                 <h3 class="text-secondary text-[10px] font-bold uppercase tracking-widest mb-1 group-hover:text-accent transition-colors">Productivity Pulse</h3>
+                 <div class="text-6xl font-display font-light text-primary tracking-tighter">{{ completedTasks }}</div>
+                 <p class="text-xs text-secondary font-mono mt-2">
+                     Tasks completed across the board.
                  </p>
              </div>
-             <div class="text-3xl">🚀</div>
+             <div class="absolute right-0 top-0 text-6xl opacity-10 grayscale group-hover:grayscale-0 transition-all duration-500">🚀</div>
          </div>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-12">
         <!-- Chart Section -->
-        <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg flex flex-col items-center justify-center">
-            <h3 class="text-slate-200 font-bold mb-6 self-start w-full border-b border-slate-700 pb-2">Project Status</h3>
-            <DonutChart :items="projectStatus" :size="180" :stroke-width="20" />
+        <div class="flex flex-col items-center justify-center p-8 border border-border rounded-2xl bg-surface/30 relative">
+            <div class="absolute top-6 left-6">
+                <h3 class="text-primary font-display font-bold text-lg">Project Status</h3>
+                <p class="text-xs text-secondary font-mono tracking-wide">Distribution Overview</p>
+            </div>
+            <DonutChart :items="projectStatus" :size="240" :stroke-width="12" />
         </div>
 
-        <div class="flex flex-col space-y-6">
+        <div class="flex flex-col space-y-8">
             <!-- Focus List -->
-            <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg flex-1">
-                <h3 class="text-slate-200 font-bold mb-4 border-b border-slate-700 pb-2">Needs Focus (Most Remaining Tests)</h3>
-                <div v-if="focusProjects.length === 0" class="text-slate-500 text-sm py-4">All tracked projects fully completed! 🎉</div>
-                <div v-else class="space-y-3">
-                    <div v-for="proj in focusProjects" :key="proj.path" class="flex justify-between items-center p-3 rounded-lg bg-slate-900/50 border border-slate-700/50 hover:border-slate-600 transition-colors">
-                        <div class="min-w-0 pr-2">
-                            <div class="font-medium text-slate-200 truncate">{{ proj.name }}</div>
-                            <div class="text-xs text-slate-500 truncate">{{ proj.path }}</div>
+            <div class="flex-1">
+                <div class="flex items-center justify-between mb-6">
+                    <h3 class="text-primary font-display font-bold text-lg">Needs Focus</h3>
+                    <span class="text-[10px] text-secondary border border-border px-2 py-1 rounded font-mono">Most Remaining</span>
+                </div>
+                
+                <div v-if="focusProjects.length === 0" class="text-secondary text-sm py-4 italic font-mono">No critical items. All clear.</div>
+                <div v-else class="space-y-4">
+                    <div v-for="proj in focusProjects" :key="proj.path" class="flex justify-between items-center group py-2 border-b border-border/50 hover:border-accent/50 transition-colors cursor-default">
+                        <div class="min-w-0 pr-4">
+                            <div class="font-display font-medium text-primary text-lg group-hover:text-accent transition-colors truncate">{{ proj.name }}</div>
+                            <div class="text-[10px] text-secondary font-mono truncate opacity-60">{{ proj.path }}</div>
                         </div>
                         <div class="text-right flex-shrink-0">
-                             <div class="text-xs font-bold text-rose-400">
-                                 {{ proj.stats.total - proj.stats.completed }} Left
+                             <div class="text-2xl font-display font-light text-primary group-hover:text-danger conversion-colors">
+                                 {{ proj.stats.total - proj.stats.completed }}
                              </div>
-                             <div class="text-[10px] text-slate-500">
-                                 {{ proj.stats.percentage }}%
-                             </div>
+                             <div class="text-[10px] text-secondary uppercase tracking-widest">Left</div>
                         </div>
                     </div>
                 </div>
             </div>
 
             <!-- Quick Wins -->
-            <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg flex-1">
-                <div class="flex justify-between items-center mb-4 border-b border-slate-700 pb-2">
-                    <h3 class="text-slate-200 font-bold">Quick Wins ⚡</h3>
-                    <span class="text-[10px] text-sky-400 font-mono bg-sky-900/30 px-2 py-0.5 rounded">>75% Done</span>
+            <div class="flex-1 pt-8 border-t border-border/50">
+                <div class="flex justify-between items-center mb-6">
+                     <h3 class="text-primary font-display font-bold text-lg">Quick Wins</h3>
+                     <span class="text-[10px] text-accent border border-accent/30 bg-accent/5 px-2 py-1 rounded font-mono">>75% Done</span>
                 </div>
                 
-                <div v-if="quickWins.length === 0" class="text-slate-500 text-sm py-4">No projects in the final stretch. Keep pushing!</div>
-                <div v-else class="space-y-3">
-                    <div v-for="proj in quickWins" :key="proj.path" class="p-3 rounded-lg bg-slate-900/50 border border-slate-700/50 hover:border-slate-600 transition-colors">
-                        <div class="flex justify-between items-center mb-2">
-                             <div class="font-medium text-slate-200 text-sm truncate">{{ proj.name }}</div>
-                             <div class="text-xs font-bold text-emerald-400">{{ proj.stats.percentage }}%</div>
+                <div v-if="quickWins.length === 0" class="text-secondary text-sm py-4 italic font-mono">No sprints available.</div>
+                <div v-else class="space-y-4">
+                    <div v-for="proj in quickWins" :key="proj.path" class="group cursor-default">
+                        <div class="flex justify-between items-end mb-2">
+                             <div class="font-display font-medium text-primary text-sm">{{ proj.name }}</div>
+                             <div class="text-xs font-mono font-bold text-success">{{ proj.stats.percentage }}%</div>
                         </div>
-                        <div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
-                            <div class="h-full bg-emerald-500 rounded-full" :style="{ width: `${proj.stats.percentage}%` }"></div>
+                        <div class="w-full bg-border rounded-full h-0.5 overflow-hidden group-hover:h-1 transition-all duration-300">
+                            <div class="h-full bg-success rounded-full" :style="{ width: `${proj.stats.percentage}%` }"></div>
                         </div>
                     </div>
                 </div>
