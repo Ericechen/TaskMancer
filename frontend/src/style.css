@@ -1,6 +1,11 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@theme {
+  --color-sky-400: #38bdf8;
+  --color-indigo-400: #818cf8;
+  --color-emerald-400: #34d399;
+  --color-rose-500: #f43f5e;
+}
 
 /* Custom Scrollbar for better aesthetics */
 ::-webkit-scrollbar {
@@ -18,5 +23,7 @@
 }
 
 body {
-  @apply bg-slate-900 text-slate-50;
+    /* bg-slate-900 text-slate-50 */
+    background-color: #0f172a; 
+    color: #f8fafc;
 }
