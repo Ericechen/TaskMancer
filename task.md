@@ -175,4 +175,9 @@
 - [x] 全站配色與亮度二次調校完成
 - [x] 正式同步 package.json 與 UI 版本號
 
+
+## v10.0.1 - Git Watcher Fix (已完成)
+- [x] 修正 `watcher_service.py` 排除 `.git` 資料夾導致 commit 後不刷新的問題
+- [x] 允許 Git `index` 與 `HEAD` 變更觸發 UI 即時刷新
+
 [Link]: https://github.com/Ericechen/TaskMancer

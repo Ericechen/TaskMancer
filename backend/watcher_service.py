@@ -20,7 +20,14 @@ class DebouncedEventHandler(FileSystemEventHandler):
             return
 
         path = event.src_path.replace("\\", "/")
-        ignore_patterns = ['/.git/', '/node_modules/', '/__pycache__/', '/.venv/', '/venv/', 'projects.json', '.tmp', '.swp']
+        
+        # v10.0.1: 特殊處理 Git 變更，允許 Index 或 Head 變更觸發刷新
+        # 排除掉其他的 git 內部雜訊
+        if '/.git/' in path:
+            if not any(important in path for important in ['/.git/index', '/.git/HEAD', '/.git/FETCH_HEAD']):
+                return
+        
+        ignore_patterns = ['/node_modules/', '/__pycache__/', '/.venv/', '/venv/', 'projects.json', '.tmp', '.swp']
         
         if any(p in path for p in ignore_patterns):
             return
