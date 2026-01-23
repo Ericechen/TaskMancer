@@ -2,8 +2,6 @@
 
 **TaskMancer** 是一個強大的多專案任務管理儀表板，專為開發者設計。它能遞迴掃描資料夾中的 `task.md`，並透過現代化的 Web 介面 (Vue 3 + Tailwind CSS v4) 呈現即時進度。
 
-![Dashboard Preview](https://via.placeholder.com/800x400?text=TaskMancer+Dashboard)
-
 ## Features
 
 - **🔎 自動掃描 (Auto-Discovery)**: 遞迴搜尋指定路徑下的 `task.md` 文件。
@@ -16,6 +14,8 @@
 - **🗑️ 雙重刪除模式**: 支援「移除追蹤」與「刪除資料夾」兩種刪除方式。
 - **🚀 快捷行動系統**: 卡片內建「Antigravity」與「Dev」快速鍵，支援自定義 `start.bat` 啟動腳本。
 - **🔗 外部連結整合**: 自動解析 `task.md` 中的 `[Link]: url` 語法，顯示為 GitHub 標籤並支援跳轉。
+- **📊 進階監視器 (v6.0)**: 整合 Git 快照 (Branch, Sync Status, Uncommitted) 與 7 天開發動能 (Momentum)。
+- **🏥 專案診斷中心 (v6.1)**: 自動檢測環境健康度 (NM, PY Venv) 並量化代碼指標 (LOC, 檔案大小, 語言分佈)。
 
 ## Quick Start
 

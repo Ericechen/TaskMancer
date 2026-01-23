@@ -8,6 +8,10 @@
 - **Python**: 
   - 使用 `uv` 管理虛擬環境 (venv)。
   - 使用 `python-decouple` 管理 `.env` 配置。
+  - Git 操作優先封裝於 `git_utils.py`。
+- **Frontend (Vue 3)**:
+  - 樣式採用 Tailwind CSS v4，保持 "Void" 深色美學。
+  - 專案指標 (LOC, Size) 必須使用格式化 Helper 以保持介面整潔。
 - **Git**:
   - 創建新項目時務必初始化 git。
   - 每個 task 完成後，提醒使用者進行 commit。

@@ -16,32 +16,16 @@ class DebouncedEventHandler(FileSystemEventHandler):
         self._changed_paths: Set[str] = set()
 
     def on_any_event(self, event: FileSystemEvent):
-        # We only care about file events, not directory events (usually)
-        # and specifically we are interested in task.md changes.
-        # But atomic saves often involve rename/delete/create.
-        # So we should track the affected paths.
-        
         if event.is_directory:
             return
 
-        filename = event.src_path.split('\\')[-1].split('/')[-1]
+        path = event.src_path.replace("\\", "/")
+        ignore_patterns = ['/.git/', '/node_modules/', '/__pycache__/', '/.venv/', '/venv/', 'projects.json', '.tmp', '.swp']
         
-        # Simple filter: only care if it looks related to task.md or temp files that might become task.md
-        # However, for atomic saves, we might see temporary filenames.
-        # So simpler approach: Just debounce EVERYTHING in the watched folder?
-        # No, that's too broad. 
-        # Better: Triger checking the directory scanner again? 
-        # Or simpler: If the path ends with 'task.md', or we detect a move to 'task.md'.
-        
-        # Let's just track that *something* happened, and then trigger a rescan/reparse of the relevant project
-        # In this simplistic version, we just blindly trigger a reload of everything or specific paths.
-        # To make it robust for atomic save:
-        # vscode writes to .task.md.swp -> rename to task.md
-        # so we final destination is what matters.
-        
-        # If we just watch for ANY change, and then after 500ms quiet period, 
-        # we ask the ProjectManager to "Refresh All" or "Refresh Modified".
-        
+        if any(p in path for p in ignore_patterns):
+            return
+
+        logger.info(f"Triggered by: {path}")
         self._changed_paths.add(event.src_path)
         self.debounce()
 

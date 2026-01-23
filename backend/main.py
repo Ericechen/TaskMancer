@@ -14,6 +14,8 @@ from watchdog.observers import Observer
 from scanner import DirectoryScanner
 from watcher_service import DebouncedEventHandler
 from task_parser import TaskParser
+from git_utils import GitHelper
+from health_utils import get_project_health_report
 
 # Configure Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -183,6 +185,14 @@ class ProjectManager:
                     has_start_bat = False
                     has_readme = False
 
+                # Git Stats
+                git_helper = GitHelper(meta['path'])
+                git_snapshot = git_helper.get_repo_snapshot()
+                git_momentum = git_helper.get_momentum_score()
+
+                # Health & Metrics
+                health_report = get_project_health_report(meta['path'])
+
                 all_projects_data.append({
                     "name": meta['name'],
                     "path": meta['path'],
@@ -190,7 +200,11 @@ class ProjectManager:
                     "tasks": parsed['tasks'],
                     "links": parsed.get('links', []),
                     "hasStartBat": has_start_bat,
-                    "hasReadme": has_readme
+                    "hasReadme": has_readme,
+                    "git": git_snapshot,
+                    "momentum": git_momentum,
+                    "health": health_report['health'],
+                    "metrics": health_report['metrics']
                 })
         
         all_projects_data.sort(key=lambda x: x['name'])

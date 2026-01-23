@@ -124,25 +124,21 @@ async function handleInfo() {
         const html = await marked(content)
         
         $swal.fire({
-            title: `
-                <div class="flex flex-col items-center">
-                    <span class="text-accent text-xl font-display font-bold">${props.project.name}</span>
-                    <span class="text-[10px] text-secondary font-mono opacity-50 mt-1">${props.project.path}</span>
-                </div>
-            `,
             html: `
-                <div class="tm-readme-content text-left max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+                <div class="tm-readme-content text-left max-h-[70vh] overflow-y-auto pr-2 custom-scrollbar">
                     ${html}
                 </div>
             `,
             width: '850px',
+            padding: '2.5rem',
             background: '#121212',
             color: '#F8FAFC',
-            confirmButtonText: 'Done Reading',
-            confirmButtonColor: '#8B5CF6',
+            showConfirmButton: false,
+            showCloseButton: true,
             customClass: {
                 popup: 'rounded-2xl border border-white/5 shadow-2xl backdrop-blur-xl',
-                confirmButton: 'px-8 py-2 rounded-lg font-bold tracking-tight'
+                htmlContainer: 'm-0',
+                closeButton: 'border-none text-secondary hover:text-accent transition-colors'
             },
             showClass: {
                 popup: 'animate-fade-in-up'
@@ -155,6 +151,22 @@ async function handleInfo() {
             text: e.message || 'Error occurred while fetching documentation'
         })
     }
+}
+function formatNumber(num?: number): string {
+    if (num === undefined) return '0'
+    return new Intl.NumberFormat().format(num)
+}
+
+function formatSize(bytes?: number): string {
+    if (bytes === undefined) return '0 B'
+    const units = ['B', 'KB', 'MB', 'GB', 'TB']
+    let val = bytes
+    let unitIndex = 0
+    while (val >= 1024 && unitIndex < units.length - 1) {
+        val /= 1024
+        unitIndex++
+    }
+    return `${val.toFixed(1)} ${units[unitIndex]}`
 }
 </script>
 
@@ -206,6 +218,40 @@ async function handleInfo() {
           <p class="text-[10px] text-secondary font-mono truncate opacity-60 pl-3.5" :title="project.path">
               {{ project.path }}
           </p>
+          <!-- Git Snapshot & Momentum -->
+          <div v-if="project.git && project.git.is_git" class="flex items-center flex-wrap gap-x-3 gap-y-1 pl-3.5 mt-0.5 text-[10px] font-mono">
+              <!-- Branch -->
+              <div class="flex items-center text-primary/80">
+                  <svg class="w-3 h-3 mr-1 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
+                  </svg>
+                  <span>{{ project.git.branch }}</span>
+              </div>
+              
+              <!-- Sync Status -->
+              <div v-if="project.git.sync_status && project.git.sync_status !== 'Not checked'" class="flex items-center px-1.5 py-0.25 rounded bg-surface/50 border border-border/30">
+                  <span :class="{
+                      'text-success/90': project.git.sync_status === 'Synced',
+                      'text-accent/90': project.git.sync_status.includes('Ahead'),
+                      'text-warning/90': project.git.sync_status.includes('Behind') || project.git.sync_status.includes('Diverged')
+                  }">{{ project.git.sync_status }}</span>
+              </div>
+
+              <!-- Uncommitted -->
+              <div v-if="project.git.uncommitted > 0" class="text-danger flex items-center">
+                  <span class="w-1 h-1 rounded-full bg-danger animate-pulse mr-1"></span>
+                  {{ project.git.uncommitted }} changes
+              </div>
+
+              <!-- Momentum -->
+              <div v-if="project.momentum !== undefined" class="flex items-center text-secondary/60 ml-auto" title="Activities (Commits) in last 7 days">
+                  <svg class="w-3 h-3 mr-1 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  <span>{{ project.momentum }} activity</span>
+              </div>
+          </div>
+
           <!-- GitHub Tags (Moved below path) -->
           <div v-if="project.links && project.links.length > 0" class="flex flex-wrap gap-1 pl-3.5 mt-1">
               <a 
@@ -260,24 +306,48 @@ async function handleInfo() {
     </div>
 
     <!-- Stats Grid -->
-    <div class="flex items-baseline space-x-6 text-sm mb-4 pl-3.5">
+    <div class="flex items-baseline space-x-8 text-sm mb-5 pl-3.5 mt-4">
        <div class="flex flex-col">
-           <span class="text-[10px] text-secondary uppercase tracking-widest font-bold">Progress</span>
-           <span class="font-mono font-bold" :class="project.stats.percentage === 100 ? 'text-success' : 'text-primary'">{{ project.stats.percentage }}%</span>
+           <span class="text-[9px] text-secondary/50 uppercase tracking-[0.1em] font-bold mb-0.5">Progress</span>
+           <span class="font-mono font-bold text-lg leading-tight" :class="project.stats.percentage === 100 ? 'text-success' : 'text-primary'">{{ project.stats.percentage }}%</span>
        </div>
        <div class="flex flex-col">
-           <span class="text-[10px] text-secondary uppercase tracking-widest font-bold">Done</span>
-           <span class="font-mono text-secondary">{{ project.stats.completed }} / {{ project.stats.total }}</span>
+           <span class="text-[9px] text-secondary/50 uppercase tracking-[0.1em] font-bold mb-0.5">Done Tasks</span>
+           <span class="font-mono text-secondary text-lg leading-tight">{{ project.stats.completed }}<span class="mx-1 opacity-30">/</span>{{ project.stats.total }}</span>
        </div>
     </div>
 
     <!-- Progress Line -->
-    <div class="w-full bg-border/30 h-[1px] mb-4 overflow-hidden relative">
+    <div class="w-full bg-white/5 h-[1.5px] mb-4 overflow-hidden relative">
       <div 
-        class="h-[1px] absolute top-0 left-0 transition-all duration-500 ease-out"
-        :class="project.stats.percentage === 100 ? 'bg-success' : 'bg-accent'"
+        class="h-full absolute top-0 left-0 transition-all duration-700 ease-in-out"
+        :class="project.stats.percentage === 100 ? 'bg-success shadow-[0_0_8px_rgba(34,197,94,0.4)]' : 'bg-accent shadow-[0_0_8px_rgba(139,92,246,0.4)]'"
         :style="{ width: `${project.stats.percentage}%` }"
       ></div>
+    </div>
+
+    <!-- Footer: Environment & Metrics -->
+    <div class="mt-0 flex items-center justify-between pl-3.5 pr-2 pt-3.5 pb-4 border-t border-white/5 opacity-80">
+        <!-- Health Badges -->
+        <div v-if="project.health" class="flex items-center space-x-1.5">
+            <div 
+                :class="project.health.has_node_modules ? 'bg-success/10 text-success border-success/20' : 'bg-white/5 text-secondary/30 border-white/5'" 
+                class="px-1.5 py-0.5 rounded-md border text-[8px] font-bold tracking-tighter"
+                title="node_modules"
+            >NM</div>
+            <div 
+                :class="project.health.has_venv ? 'bg-success/10 text-success border-success/20' : 'bg-white/5 text-secondary/30 border-white/5'" 
+                class="px-1.5 py-0.5 rounded-md border text-[8px] font-bold tracking-tighter"
+                title="Python venv"
+            >PY</div>
+        </div>
+        
+        <!-- Technical Metrics -->
+        <div v-if="project.metrics" class="flex items-center space-x-2.5 text-[9px] font-mono text-secondary/40 italic">
+            <span>{{ formatNumber(project.metrics.loc) }} loc</span>
+            <span>{{ formatSize(project.metrics.size) }}</span>
+            <span>{{ project.metrics.fileCount }} files</span>
+        </div>
     </div>
 
 

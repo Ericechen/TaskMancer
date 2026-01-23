@@ -81,3 +81,12 @@ h1, h2, h3, h4, h5, h6 {
 .tm-readme-content ul > li::marker {
   @apply text-accent;
 }
+
+/* SweetAlert2 Close Button Nudge */
+.swal2-close {
+  @apply !m-0 !outline-none !shadow-none !border-none;
+  position: absolute !important;
+  top: 0.5rem !important;
+  right: 0.5rem !important;
+  z-index: 100 !important;
+}

@@ -14,6 +14,27 @@ export interface ProjectStats {
   percentage: number;
 }
 
+export interface GitSnapshot {
+  branch: string;
+  is_git: boolean;
+  uncommitted: number;
+  sync_status: string;
+}
+
+export interface ProjectHealth {
+  has_node_modules: boolean;
+  has_venv: boolean;
+  is_npm: boolean;
+  is_python: boolean;
+}
+
+export interface CodebaseMetrics {
+  loc: number;
+  languages: Record<string, number>;
+  fileCount: number;
+  size: number;
+}
+
 export interface Project {
   name: string;
   path: string;
@@ -22,6 +43,10 @@ export interface Project {
   links: string[];
   hasStartBat: boolean;
   hasReadme: boolean;
+  git?: GitSnapshot;
+  momentum?: number;
+  health?: ProjectHealth;
+  metrics?: CodebaseMetrics;
 }
 
 export const useProjectStore = defineStore('project', () => {

@@ -28,7 +28,7 @@
 - [x] 安裝 `sweetalert2`
 - [x] 全域 SweetAlert2 深色主題配置 (`swal.ts`)
 - [x] 替換原生 `confirm` 與 `alert` 為美化彈窗
-- [x] 實作上傳成功 Toast 通知
+- [x] 實實作上傳成功 Toast 通知
 
 ## v3.0 - 雙重刪除模式 (已完成)
 - [x] Backend: `DELETE /api/roots` 支援 `delete_files` 參數
@@ -69,5 +69,19 @@
 - [x] Frontend: 專案卡片條件顯示「Dev/Info」按鈕
 - [x] Frontend: 實作 README Markdown 彈窗介面
 
+## v6.0 - 進階監控 (Git 與活動中心) (已完成)
+- [x] Backend: 實作 Git 資料獲取模組 (Branch, Status, Commits)
+- [x] Frontend: Dashboard 新增 Git 同步快照與活動動能 (Momentum)
+
+## v6.1 - 專案診斷 (環境與規模指標) (已完成)
+- [x] Backend: 自動偵測環境健康度 (Dependencies, Engines)
+- [x] Backend: 實作代碼規模量化 (LOC, Size, Languages)
+- [x] Frontend: Dashboard 新增診斷結果與規模分布
+
+## v6.2 - UI 精緻化與穩定性 (已完成)
+- [x] Backend: 優化檔案監視器，加入忽略清單過濾雜訊
+- [x] Backend: 修正 GitHelper 命名不一致導致的 Attribute Error
+- [x] Frontend: 重新設計專案卡片佈局，將技術指標移至 Footer
+- [x] Frontend: 精細調校診斷列與進度條之間的垂直間距
 
 [Link]: https://github.com/Ericechen/TaskMancer
