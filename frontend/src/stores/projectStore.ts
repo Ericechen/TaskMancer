@@ -85,9 +85,9 @@ export const useProjectStore = defineStore('project', () => {
     }
   }
 
-  async function removeProject(path: string) {
+  async function removeProject(path: string, deleteFiles: boolean = false) {
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/roots?path=${encodeURIComponent(path)}`, {
+      const response = await fetch(`http://127.0.0.1:8000/api/roots?path=${encodeURIComponent(path)}&delete_files=${deleteFiles}`, {
         method: 'DELETE',
       })
       if (!response.ok) throw new Error('Failed to remove project')
@@ -140,5 +140,52 @@ export const useProjectStore = defineStore('project', () => {
     }
   }
 
-  return { projects, isConnected, connect, addProject, removeProject, discoveryRoot, setDiscoveryRoot, discoverProjects, fetchConfig }
+  async function createProject(parentPath: string, name: string, file: File | null) {
+    try {
+      const formData = new FormData()
+      formData.append('parent_path', parentPath)
+      formData.append('name', name)
+      if (file) {
+        formData.append('file', file)
+      }
+
+      const response = await fetch('http://127.0.0.1:8000/api/projects/create', {
+        method: 'POST',
+        body: formData, 
+      })
+
+      if (!response.ok) {
+        const err = await response.json()
+        throw new Error(err.detail || 'Failed to create project')
+      }
+      return true
+    } catch (e) {
+      console.error(e)
+      throw e 
+    }
+  }
+
+  async function uploadProjectFile(projectPath: string, file: File) {
+    try {
+        const formData = new FormData()
+        formData.append('project_path', projectPath)
+        formData.append('file', file)
+
+        const response = await fetch('http://127.0.0.1:8000/api/projects/upload', {
+            method: 'POST',
+            body: formData,
+        })
+
+        if (!response.ok) {
+            const err = await response.json()
+            throw new Error(err.detail || 'Failed to upload file')
+        }
+        return true
+    } catch (e) {
+        console.error(e)
+        throw e
+    }
+  }
+
+  return { projects, isConnected, connect, addProject, removeProject, discoveryRoot, setDiscoveryRoot, discoverProjects, fetchConfig, createProject, uploadProjectFile }
 })

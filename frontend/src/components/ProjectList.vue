@@ -21,19 +21,7 @@ const completedProjects = computed(() => store.projects.filter(p => p.stats.perc
 
       <div v-else class="space-y-16 animate-fade-in-up">
           
-          <!-- Section 1: Drafts (Not Started) -->
-          <section v-if="draftProjects.length > 0">
-              <div class="flex items-center space-x-4 mb-6">
-                  <h2 class="text-xl font-display font-medium text-secondary">Drafts</h2>
-                  <div class="h-[1px] flex-1 bg-border/50"></div>
-                  <span class="text-xs font-mono text-secondary px-2 py-1 bg-surface border border-border rounded">{{ draftProjects.length }}</span>
-              </div>
-              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  <ProjectCard v-for="p in draftProjects" :key="p.path" :project="p" />
-              </div>
-          </section>
-          
-          <!-- Section 2: In Progress -->
+          <!-- Section 1: In Progress -->
           <section>
               <div class="flex items-center space-x-4 mb-6">
                   <h2 class="text-xl font-display font-bold text-primary">In Progress</h2>
@@ -49,6 +37,18 @@ const completedProjects = computed(() => store.projects.filter(p => p.stats.perc
               </div>
           </section>
 
+          <!-- Section 2: Drafts (Not Started) -->
+          <section v-if="draftProjects.length > 0">
+              <div class="flex items-center space-x-4 mb-6">
+                  <h2 class="text-xl font-display font-medium text-secondary">Drafts</h2>
+                  <div class="h-[1px] flex-1 bg-border/50"></div>
+                  <span class="text-xs font-mono text-secondary px-2 py-1 bg-surface border border-border rounded">{{ draftProjects.length }}</span>
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <ProjectCard v-for="p in draftProjects" :key="p.path" :project="p" />
+              </div>
+          </section>
+          
           <!-- Section 3: Completed -->
           <section v-if="completedProjects.length > 0" class="opacity-80 hover:opacity-100 transition-opacity">
                <div class="flex items-center space-x-4 mb-6">

@@ -10,7 +10,10 @@
 - **🌲 巢狀任務解析 (Nested Parsing)**: 支援無限層級的縮排任務清單。
 - **⚡ 即時更新 (Real-time)**: 檔案變更後 (Debounced)，Web 介面毫秒級自動刷新。
 - **🎨 現代化介面 (Modern UI)**: 深色模式、瀑布流 (Masonry) 排版、Markdown 渲染支援。
-- **💾 持久化 (Persistence)**: 自動記住您加入的專案路徑 (`projects.json`)。
+- **💾 專案持久化 (Persistence)**: 自動記住專案路徑 (`projects.json`)。
+- **📂 專案管理 (Management)**: 支援直接在 UI 創建專案與上傳文件 (如 PRD, task.md)。
+- **✨ SweetAlert2 整合**: 全面替換原生彈窗，提升操作質感。
+- **🗑️ 雙重刪除模式**: 支援「移除追蹤」與「刪除資料夾」兩種刪除方式。
 
 ## Quick Start
 

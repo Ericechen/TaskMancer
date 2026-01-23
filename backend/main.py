@@ -2,8 +2,10 @@ import asyncio
 import argparse
 import logging
 import os
+import shutil
+from pathlib import Path
 from typing import List, Dict, Any, Set
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from watchdog.events import FileSystemEventHandler
@@ -183,6 +185,73 @@ class ProjectManager:
 # Initialize Global Manager
 project_manager = ProjectManager()
 
+@app.post("/api/projects/create")
+async def create_project(
+    parent_path: str = Form(...),
+    name: str = Form(...),
+    file: UploadFile = File(None)
+):
+    try:
+        # Validate inputs
+        if not parent_path or not name:
+            raise HTTPException(status_code=400, detail="Parent path and project name are required")
+            
+        parent = Path(parent_path)
+        if not parent.exists() or not parent.is_dir():
+            raise HTTPException(status_code=400, detail="Invalid parent directory")
+            
+        # Create project directory
+        project_path = parent / name
+        if project_path.exists():
+            raise HTTPException(status_code=400, detail="project name exist")
+            
+        os.makedirs(project_path)
+        
+        # Save task.md (or create default)
+        file_path = project_path / "task.md"
+        if file:
+            with open(file_path, "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
+        else:
+            # Create default empty template
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(f"# {name}\n\n- [ ] Initial Task")
+            
+        # Register project
+        # We add the specific project path as a root
+        project_manager.add_root(str(project_path))
+        
+        return {"status": "success", "path": str(project_path), "message": f"Project '{name}' created successfully"}
+        
+    except Exception as e:
+        # Cleanup if created but failed later (optional, but good practice)
+        # For now, just report error
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/projects/upload")
+async def upload_project_file(
+    project_path: str = Form(...),
+    file: UploadFile = File(...)
+):
+    try:
+        if not project_path:
+            raise HTTPException(status_code=400, detail="Project path required")
+            
+        path = Path(project_path)
+        if not path.exists() or not path.is_dir():
+            raise HTTPException(status_code=400, detail="Invalid project path")
+            
+        # Save file (overwrite enabled)
+        file_path = path / file.filename
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+            
+        return {"status": "success", "message": f"File '{file.filename}' uploaded successfully"}
+        
+    except Exception as e:
+        logger.error(f"Error uploading file: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.on_event("startup")
 async def startup_event():
     project_manager.start_watcher()
@@ -220,12 +289,23 @@ async def add_root_path(request: RootPathRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/api/roots")
-async def remove_root_path(path: str):
+async def remove_root_path(path: str, delete_files: bool = False):
     try:
+        abs_path = os.path.abspath(path)
+        # Perform logical removal first
         project_manager.remove_root(path)
-        return {"status": "success"}
+        
+        # Optionally perform physical removal
+        if delete_files:
+            if os.path.exists(abs_path):
+                logger.warning(f"Physically deleting directory: {abs_path}")
+                shutil.rmtree(abs_path)
+            else:
+                logger.error(f"Cannot delete non-existent path: {abs_path}")
+                
+        return {"status": "success", "deleted_files": delete_files}
     except ValueError:
-         raise HTTPException(status_code=404, detail="Path not found found in watchlist")
+         raise HTTPException(status_code=404, detail="Path not found in watchlist")
     except Exception as e:
         logger.error(f"Error removing root: {e}")
         raise HTTPException(status_code=500, detail=str(e))
