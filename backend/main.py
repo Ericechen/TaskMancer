@@ -170,7 +170,8 @@ class ProjectManager:
                     "name": meta['name'],
                     "path": meta['path'],
                     "stats": parsed['stats'],
-                    "tasks": parsed['tasks']
+                    "tasks": parsed['tasks'],
+                    "links": parsed.get('links', [])
                 })
         
         all_projects_data.sort(key=lambda x: x['name'])
@@ -250,6 +251,44 @@ async def upload_project_file(
         
     except Exception as e:
         logger.error(f"Error uploading file: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+class CommandRequest(BaseModel):
+    path: str
+    cmd: str # 'open' or 'dev'
+
+@app.post("/api/projects/command")
+async def run_project_command(request: CommandRequest):
+    try:
+        path = Path(request.path)
+        if not path.exists() or not path.is_dir():
+            raise HTTPException(status_code=400, detail="Invalid project path")
+            
+        if request.cmd == "open":
+            # Windows: start Antigravity explicitly
+            logger.info(f"Opening Antigravity in {path}")
+            os.system(f'cd /d "{path}" && antigravity .')
+            return {"status": "success", "message": "Antigravity opened"}
+            
+        elif request.cmd == "dev":
+            # Windows: start dev in a NEW terminal window and keep it open
+            logger.info(f"Starting dev server in {path}")
+            
+            # Check for start.bat
+            dev_cmd = "npm run dev"
+            if (path / "start.bat").exists():
+                logger.info(f"Found start.bat in {path}, using it instead of default dev command")
+                dev_cmd = "start.bat"
+                
+            # we use start cmd /k to open a new window and keep it open if it crashes/ends
+            os.system(f'start cmd /k "cd /d \u0022{path}\u0022 && {dev_cmd}"')
+            return {"status": "success", "message": f"Dev server started with '{dev_cmd}' in new window"}
+            
+        else:
+            raise HTTPException(status_code=400, detail="Unknown command")
+            
+    except Exception as e:
+        logger.error(f"Error running command: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.on_event("startup")

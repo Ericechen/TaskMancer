@@ -39,3 +39,21 @@
 
 ## v3.2 - UI 優化 (彈窗內容美化) (已完成)
 - [x] Frontend: 文字階層化與 HTML 內容重構
+
+## v4.0 - 交互增強 (連結與指令) (已完成)
+- [x] Backend: 支援 `[Link]:` 自動掃描連結
+- [x] Backend: 一鍵執行 `code .` 與 `npm run dev`
+- [x] Frontend: 專案卡片新增「快捷行動」功能區
+
+## v4.2 - UI 細節調整 (已完成)
+- [x] Frontend: 將 Link 標籤改名為 GitHub 並移至路徑下方
+- [x] Frontend: 將快捷按鈕 Focus 改名為 Antigravity
+
+## v4.3 - 邏輯修正 (開啟正確編輯器) (已完成)
+- [x] Backend: 將 `open` 指令修改為 `antigravity .`
+
+## v4.5 - 自定義啟動指令 (.bat 支援) (已完成)
+- [x] Backend: 實作 `start.bat` 自動偵測與優先執行邏輯
+
+
+[Link]: https://github.com/Ericechen/TaskMancer

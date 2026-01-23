@@ -19,6 +19,7 @@ export interface Project {
   path: string;
   stats: ProjectStats;
   tasks: Task[];
+  links: string[];
 }
 
 export const useProjectStore = defineStore('project', () => {
@@ -187,5 +188,33 @@ export const useProjectStore = defineStore('project', () => {
     }
   }
 
-  return { projects, isConnected, connect, addProject, removeProject, discoveryRoot, setDiscoveryRoot, discoverProjects, fetchConfig, createProject, uploadProjectFile }
+  async function runCommand(path: string, cmd: 'open' | 'dev') {
+    try {
+      const response = await fetch('http://127.0.0.1:8000/api/projects/command', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path, cmd })
+      })
+      if (!response.ok) throw new Error('Command failed')
+      return true
+    } catch (e: any) {
+      console.error(e)
+      throw e
+    }
+  }
+
+  return { 
+    projects, 
+    isConnected, 
+    connect, 
+    addProject, 
+    removeProject, 
+    discoveryRoot, 
+    setDiscoveryRoot, 
+    discoverProjects, 
+    fetchConfig, 
+    createProject, 
+    uploadProjectFile,
+    runCommand
+  }
 })

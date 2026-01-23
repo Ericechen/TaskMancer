@@ -15,17 +15,23 @@ class TaskParser:
         root_nodes = []
         stack = [] # Stack of (level, node_dict)
 
-        # Regex for standard markdown checklist: "- [ ] " or "* [x] "
-        # Group 1: Leading whitespace
-        # Group 2: Marker (- or *)
-        # Group 3: Status (x or space)
-        # Group 4: Text
+        # Regex for standard markdown checklist
         pattern = re.compile(r'^(\s*)([-*])\s+\[([xX ])\]\s+(.*)')
+        # Regex for [Link]: https://...
+        link_pattern = re.compile(r'^\[Link\]:\s*(https?://[^\s]+)')
 
+        links = []
         for line in lines:
-            if not line.strip():
+            line_strip = line.strip()
+            if not line_strip:
                 continue
                 
+            # Check for links
+            link_match = link_pattern.match(line_strip)
+            if link_match:
+                links.append(link_match.group(1))
+                continue
+
             match = pattern.match(line)
             if match:
                 indent_str, marker, status_char, text = match.groups()
@@ -67,7 +73,8 @@ class TaskParser:
         
         return {
             "tasks": root_nodes,
-            "stats": stats
+            "stats": stats,
+            "links": links
         }
 
     def _calculate_stats(self, nodes: List[Dict]) -> Dict[str, Any]:

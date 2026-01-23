@@ -14,7 +14,23 @@ const isDeleting = ref(false)
 const isUnlinking = ref(false)
 
 const isUploading = ref(false)
+const isRunningCommand = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
+
+async function handleCommand(cmd: 'open' | 'dev') {
+    isRunningCommand.value = true
+    try {
+        await store.runCommand(props.project.path, cmd)
+    } catch (e: any) {
+        $swal.fire({
+            icon: 'error',
+            title: 'Command Failed',
+            text: e.message || 'Error executing command'
+        })
+    } finally {
+        isRunningCommand.value = false
+    }
+}
 
 async function handleUnlink(path: string) {
     const result = await $swal.fire({
@@ -141,14 +157,55 @@ async function handleFileChange(event: Event) {
     </div>
 
     <!-- Header -->
-    <div class="mb-6 pr-12">
-      <div class="flex items-center space-x-2 mb-1">
-          <div :class="['w-1.5 h-1.5 rounded-full', project.stats.percentage === 100 ? 'bg-success' : 'bg-accent']"></div>
-          <h3 class="text-lg font-display font-medium text-primary tracking-tight truncate">{{ project.name }}</h3>
+    <div class="mb-4 pr-16">
+      <div class="flex flex-col mb-1 gap-1.5">
+          <div class="flex items-center space-x-2">
+              <div :class="['w-1.5 h-1.5 rounded-full flex-shrink-0', project.stats.percentage === 100 ? 'bg-success' : 'bg-accent']"></div>
+              <h3 class="text-lg font-display font-medium text-primary tracking-tight truncate">{{ project.name }}</h3>
+          </div>
+          <p class="text-[10px] text-secondary font-mono truncate opacity-60 pl-3.5" :title="project.path">
+              {{ project.path }}
+          </p>
+          <!-- GitHub Tags (Moved below path) -->
+          <div v-if="project.links && project.links.length > 0" class="flex flex-wrap gap-1 pl-3.5 mt-1">
+              <a 
+                v-for="(link, idx) in project.links" 
+                :key="idx"
+                :href="link"
+                target="_blank"
+                class="text-[9px] bg-accent/10 text-accent px-2 py-0.5 rounded border border-accent/20 hover:bg-accent/20 transition-colors uppercase font-bold tracking-wider"
+                :title="link"
+                @click.stop
+              >
+                GitHub
+              </a>
+          </div>
       </div>
-      <p class="text-[10px] text-secondary font-mono truncate opacity-60 pl-3.5" :title="project.path">
-          {{ project.path }}
-      </p>
+    </div>
+
+    <!-- Quick Actions (Antigravity & Dev) -->
+    <div class="flex items-center space-x-3 mb-6 pl-3.5">
+        <button 
+            @click="handleCommand('open')"
+            :disabled="isRunningCommand"
+            class="flex items-center space-x-2 text-[10px] font-bold text-primary/80 hover:text-primary transition-colors bg-white/5 px-3 py-1.5 rounded-lg border border-white/5 hover:border-white/10"
+        >
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71L12 2z" />
+            </svg>
+            <span>Antigravity</span>
+        </button>
+        <button 
+            @click="handleCommand('dev')"
+            :disabled="isRunningCommand"
+            class="flex items-center space-x-2 text-[10px] font-bold text-emerald-400 hover:text-emerald-300 transition-colors bg-emerald-500/5 px-3 py-1.5 rounded-lg border border-emerald-500/10 hover:border-emerald-500/30"
+        >
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>Dev</span>
+        </button>
     </div>
 
     <!-- Stats Grid -->
