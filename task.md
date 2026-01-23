@@ -54,6 +54,7 @@
 
 ## v4.5 - 自定義啟動指令 (.bat 支援) (已完成)
 - [x] Backend: 實作 `start.bat` 自動偵測與優先執行邏輯
+- [x] DevOps: 為 TaskMancer 專案本身建立 `start.bat` 達成自我啟動
 
 
 [Link]: https://github.com/Ericechen/TaskMancer
