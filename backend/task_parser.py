@@ -19,6 +19,8 @@ class TaskParser:
         pattern = re.compile(r'^(\s*)([-*])\s+\[([xX ])\]\s+(.*)')
         # Regex for [Link]: https://...
         link_pattern = re.compile(r'^\[Link\]:\s*(https?://[^\s]+)')
+        # Regex for Headers: ## Title
+        header_pattern = re.compile(r'^(#+)\s+(.*)')
 
         links = []
         for line in lines:
@@ -31,15 +33,35 @@ class TaskParser:
             if link_match:
                 links.append(link_match.group(1))
                 continue
+            
+            # Check for headers
+            header_match = header_pattern.match(line_strip)
+            if header_match:
+                hashes, text = header_match.groups()
+                num_hashes = len(hashes)
+                if num_hashes == 1:
+                    continue # Ignore H1
+                
+                # H2 = level 0, H3 = level 1...
+                level = num_hashes - 2
+                node = {
+                    "text": text.strip(),
+                    "status": "done",
+                    "level": max(0, level),
+                    "children": [],
+                    "isHeader": True
+                }
+                self._add_to_tree(root_nodes, stack, node)
+                continue
 
             match = pattern.match(line)
             if match:
                 indent_str, marker, status_char, text = match.groups()
                 
-                # Calculate level (assuming 2 spaces per level, or 4)
-                # Let's normalize tabs to 4 spaces first if needed, but simple len check is usually okay for consistent files
+                # Calculate level: (indent / 2) + 1 
+                # This ensures even unindented items (level 1) sit under H2 (level 0)
                 indent_len = len(indent_str.replace('\t', '    '))
-                level = indent_len // 2 # Rough heuristic: 2 spaces = 1 level
+                level = (indent_len // 2) + 1
                 
                 is_completed = status_char.lower() == 'x'
                 
@@ -49,24 +71,7 @@ class TaskParser:
                     "level": level,
                     "children": []
                 }
-
-                # Tree building logic
-                if not stack:
-                    root_nodes.append(node)
-                    stack.append(node)
-                else:
-                    # Pop stack until we find the parent (node with level < current level)
-                    while stack and stack[-1]['level'] >= level:
-                        stack.pop()
-                    
-                    if stack:
-                        # Parent found
-                        stack[-1]['children'].append(node)
-                    else:
-                        # Top level node
-                        root_nodes.append(node)
-                    
-                    stack.append(node)
+                self._add_to_tree(root_nodes, stack, node)
 
         # Calculate stats (Recursive)
         stats = self._calculate_stats(root_nodes)
@@ -76,6 +81,23 @@ class TaskParser:
             "stats": stats,
             "links": links
         }
+
+    def _add_to_tree(self, root_nodes: List[Dict], stack: List[Dict], node: Dict):
+        level = node['level']
+        if not stack:
+            root_nodes.append(node)
+            stack.append(node)
+        else:
+            # Pop stack until we find the parent (node with level < current level)
+            while stack and stack[-1]['level'] >= level:
+                stack.pop()
+            
+            if stack:
+                stack[-1]['children'].append(node)
+            else:
+                root_nodes.append(node)
+            
+            stack.append(node)
 
     def _calculate_stats(self, nodes: List[Dict]) -> Dict[str, Any]:
         total = 0

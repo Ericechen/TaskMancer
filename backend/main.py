@@ -271,18 +271,21 @@ async def run_project_command(request: CommandRequest):
             return {"status": "success", "message": "Antigravity opened"}
             
         elif request.cmd == "dev":
-            # Windows: start dev in a NEW terminal window and keep it open
-            logger.info(f"Starting dev server in {path}")
+            # Windows: start dev in a NEW terminal window
+            logger.info(f"Command execution request for: {path}")
             
-            # Check for start.bat
-            dev_cmd = "npm run dev"
-            if (path / "start.bat").exists():
-                logger.info(f"Found start.bat in {path}, using it instead of default dev command")
+            # 確保使用絕對路徑進行檢查
+            bat_path = path / "start.bat"
+            if bat_path.exists():
+                logger.info(f"Detected {bat_path}, executing batch script...")
                 dev_cmd = "start.bat"
+            else:
+                logger.info(f"No start.bat found at {bat_path}, falling back to npm...")
+                dev_cmd = "npm run dev"
                 
-            # we use start cmd /k to open a new window and keep it open if it crashes/ends
+            # 使用 start cmd /k 執行
             os.system(f'start cmd /k "cd /d \u0022{path}\u0022 && {dev_cmd}"')
-            return {"status": "success", "message": f"Dev server started with '{dev_cmd}' in new window"}
+            return {"status": "success", "message": f"Started with {dev_cmd}"}
             
         else:
             raise HTTPException(status_code=400, detail="Unknown command")

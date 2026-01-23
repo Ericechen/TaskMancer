@@ -160,7 +160,7 @@ async function handleCreate() {
             <h1 class="text-3xl font-display font-bold text-primary tracking-tighter group-hover:text-accent transition-colors duration-300">
                 TaskMancer
             </h1>
-            <p class="text-xs text-secondary font-mono mt-1 tracking-widest uppercase">Project Intelligence_v4.5.0</p>
+            <p class="text-xs text-secondary font-mono mt-1 tracking-widest uppercase">Project Intelligence_v4.7.0</p>
         </div>
       </div>
 

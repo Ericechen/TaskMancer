@@ -56,5 +56,12 @@
 - [x] Backend: 實作 `start.bat` 自動偵測與優先執行邏輯
 - [x] DevOps: 為 TaskMancer 專案本身建立 `start.bat` 達成自我啟動
 
+## v4.6 - 解析器修復 (標題支援) (已完成)
+- [x] Backend: 支援 `#` Markdown 標題解析與顯示
+
+## v4.7 - 解析器優化 (層級調整) (已完成)
+- [x] Backend: 忽略 H1 (#) 標題
+- [x] Backend: H2 (##) 作為任務容器，並修正列表項嵌套縮排
+
 
 [Link]: https://github.com/Ericechen/TaskMancer
