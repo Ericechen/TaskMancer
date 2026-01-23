@@ -8,7 +8,6 @@
 - [x] Backend Refactor
     - [x] Implement `scanner.py` (Recursive Project Discovery)
     - [x] Implement `watcher_service.py` (Debounce Logic)
-    - [x] Implement Persistence (`projects.json`)
     - [x] Implement `parser.py` (Indentation-Aware Tree Parsing)
     - [x] Update `main.py` (CLI Args & WS Payload Structure)
     - [x] Verify Backend
@@ -22,14 +21,15 @@
     - [x] End-to-End Multi-project Test
 
 ## v1.2 - Dynamic Project Management (Active)
-- [/] Planning
+- [x] Planning
     - [x] Create implementation plan (v1.2)
     - [x] Update PRD (US-5)
-- [ ] Backend
-    - [ ] Update `main.py` (Add ProjectManager, API Endpoint, Dynamic Watcher)
-- [ ] Frontend
-    - [ ] Update `projectStore.ts` (Add `addProject` action)
-    - [ ] Update `App.vue` (Add Input UI)
+- [/] Backend
+    - [x] Update `main.py` (Add ProjectManager, API Endpoint, Dynamic Watcher)
+    - [x] Implement Persistence (`projects.json`)
+- [x] Frontend
+    - [x] Update `projectStore.ts` (Add `addProject` action)
+    - [x] Update `App.vue` (Add Input UI)
 - [x] Verification
     - [x] Manual Test (Add Path -> Verify Watcher)
     - [x] Fix UI Layout (Grid Stretch Issue)
@@ -43,3 +43,34 @@
     - [x] Update `TaskTree.vue` (Implement Markdown Rendering)
 - [x] Verification
     - [x] Visual Check (Layout & Markdown Style)
+
+## v1.4 - Smart Discovery (Active)
+- [/] Planning
+    - [x] Create implementation plan (v1.4)
+    - [x] Update PRD (US-6)
+- [x] **Backend Implementation**
+    - [x] Update `DirectoryScanner` (support shallow scan)
+    - [x] Add `POST /api/discover` endpoint
+    - [x] Unit Tests for Discovery (Verified via script)
+- [x] **Backend Implementation**
+    - [x] Update `DirectoryScanner` (support shallow scan)
+    - [x] Add `POST /api/discover` endpoint
+    - [x] Unit Tests for Discovery (Verified via script)
+- [x] **Frontend Implementation**
+    - [x] Update `projectStore.ts` (Add `discoverProjects` action)
+    - [x] Update `App.vue` (Implement Multi-step Modal: Search -> Select -> Import)
+- [x] Verification
+    - [x] Manual Test (Discovery Flow)
+
+## v1.5 - Usability Improvements (Active)
+- [x] Backend
+    - [x] Update `ProjectManager` to support removing roots
+    - [x] Add `DELETE /api/roots` endpoint
+    - [x] Update `projects.json` schema to store `discovery_root`
+    - [x] Add `GET /api/config` (or update logic) to retrieve `discovery_root`
+- [x] Frontend
+    - [x] Update `projectStore.ts` (fetch config, remove action)
+    - [x] Update `App.vue` (Disable existing projects in discovery)
+    - [x] Update `ProjectCard.vue` (Add Delete button)
+- [x] Verification
+    - [x] Manual Test (Persistence & Deletion)

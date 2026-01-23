@@ -62,6 +62,8 @@ class ProjectManager:
         self.observer = Observer()
         self.event_handler = None
         self.config_file = "projects.json"
+        self.discovery_root = ""
+        self.watches = {} # Map path -> ObservedWatch
 
     def start_watcher(self):
         self.event_handler = DebouncedEventHandler(
@@ -85,7 +87,8 @@ class ProjectManager:
             with open(self.config_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 paths = data.get('roots', [])
-                logger.info(f"Loading {len(paths)} projects from config.")
+                self.discovery_root = data.get('discovery_root', "")
+                logger.info(f"Loading {len(paths)} projects from config. Discovery Root: {self.discovery_root}")
                 for path in paths:
                     try:
                         self.add_root(path, save=False)
@@ -97,7 +100,10 @@ class ProjectManager:
     def save_projects(self):
         try:
             with open(self.config_file, 'w', encoding='utf-8') as f:
-                json.dump({"roots": list(self.watched_roots)}, f, indent=2)
+                json.dump({
+                    "roots": list(self.watched_roots),
+                    "discovery_root": self.discovery_root
+                }, f, indent=2)
             logger.info("Projects configuration saved.")
         except Exception as e:
             logger.error(f"Error saving config: {e}")
@@ -113,30 +119,51 @@ class ProjectManager:
         logger.info(f"Adding root: {abs_path}")
         self.watched_roots.add(abs_path)
         
-        # Schedule watcher for this new path
-        # If watcher isn't started yet (e.g. during init before startup), we might skip this
-        # But load_projects is called in start_watcher, so event_handler exists.
         if self.event_handler:
-            self.observer.schedule(self.event_handler, abs_path, recursive=True)
+            watch = self.observer.schedule(self.event_handler, abs_path, recursive=True)
+            self.watches[abs_path] = watch
         
-        # Trigger immediate update if not loading
         if save:
             self.save_projects()
             asyncio.create_task(self.notify_clients())
+
+    def remove_root(self, path: str):
+        abs_path = os.path.abspath(path)
+        if abs_path not in self.watched_roots:
+            raise ValueError(f"Path not monitored: {path}")
+            
+        logger.info(f"Removing root: {abs_path}")
+        self.watched_roots.remove(abs_path)
+        
+        if abs_path in self.watches:
+            self.observer.unschedule(self.watches[abs_path])
+            del self.watches[abs_path]
+            
+        self.save_projects()
+        asyncio.create_task(self.notify_clients())
+
+    def set_discovery_root(self, path: str):
+        self.discovery_root = path
+        self.save_projects()
 
     def get_current_state(self) -> Dict[str, Any]:
         """Scans all watched roots."""
         all_projects_data = []
         parser = TaskParser()
 
-        for root in self.watched_roots:
+        # Create a snapshot to iterate safely
+        current_roots = list(self.watched_roots)
+
+        for root in current_roots:
+            # Check if exists before scanning to avoid crashing if deleted externally
+            if not os.path.exists(root):
+                continue
+
             scanner = DirectoryScanner(root)
             projects_meta = scanner.scan()
             
             for meta in projects_meta:
                 parsed = parser.parse_file(meta['task_file'])
-                # Avoid duplicates if nested roots? 
-                # For MVP we just list them. Frontend can dedupe by path.
                 all_projects_data.append({
                     "name": meta['name'],
                     "path": meta['path'],
@@ -144,7 +171,6 @@ class ProjectManager:
                     "tasks": parsed['tasks']
                 })
         
-        # Sort by Name for consistency
         all_projects_data.sort(key=lambda x: x['name'])
         
         return {"projects": all_projects_data}
@@ -160,8 +186,6 @@ project_manager = ProjectManager()
 @app.on_event("startup")
 async def startup_event():
     project_manager.start_watcher()
-    
-    # Add initial root from args if provided
     if args and args.root:
         try:
             project_manager.add_root(args.root)
@@ -178,7 +202,6 @@ def shutdown_event():
 async def websocket_endpoint(websocket: WebSocket):
     await project_manager.connection_manager.connect(websocket)
     try:
-        # Send initial state
         await websocket.send_json(project_manager.get_current_state())
         while True:
             await websocket.receive_text()
@@ -194,6 +217,45 @@ async def add_root_path(request: RootPathRequest):
         raise HTTPException(status_code=404, detail="Directory not found")
     except Exception as e:
         logger.error(f"Error adding root: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/roots")
+async def remove_root_path(path: str):
+    try:
+        project_manager.remove_root(path)
+        return {"status": "success"}
+    except ValueError:
+         raise HTTPException(status_code=404, detail="Path not found found in watchlist")
+    except Exception as e:
+        logger.error(f"Error removing root: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/config")
+async def get_config():
+    return {
+        "discovery_root": project_manager.discovery_root,
+        "watched_roots": list(project_manager.watched_roots)
+    }
+
+@app.post("/api/discover")
+async def discover_projects(request: RootPathRequest):
+    """
+    Scans a directory (shallowly) for potential projects.
+    Returns a list of found projects but does NOT add them to the watcher.
+    """
+    try:
+        path = os.path.abspath(request.path)
+        if not os.path.exists(path):
+            raise HTTPException(status_code=404, detail="Directory not found")
+            
+        # Update discovery root preference
+        project_manager.set_discovery_root(path)
+
+        scanner = DirectoryScanner(path, max_depth=1)
+        projects = scanner.scan()
+        return {"projects": projects}
+    except Exception as e:
+        logger.error(f"Error discovering projects: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":

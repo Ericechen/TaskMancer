@@ -85,5 +85,60 @@ export const useProjectStore = defineStore('project', () => {
     }
   }
 
-  return { projects, isConnected, connect, addProject }
+  async function removeProject(path: string) {
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/api/roots?path=${encodeURIComponent(path)}`, {
+        method: 'DELETE',
+      })
+      if (!response.ok) throw new Error('Failed to remove project')
+      return true
+    } catch (e) {
+      console.error(e)
+      return false
+    }
+  }
+
+  // Smart Discovery
+  const discoveryRoot = ref('')
+
+  async function fetchConfig() {
+    try {
+        const response = await fetch('http://127.0.0.1:8000/api/config')
+        if (response.ok) {
+            const data = await response.json()
+            if (data.discovery_root) {
+                discoveryRoot.value = data.discovery_root
+            }
+        }
+    } catch (e) {
+        console.error('Failed to fetch config', e)
+    }
+  }
+
+  function setDiscoveryRoot(path: string) {
+    discoveryRoot.value = path
+    // No need to save to localStorage, backend handles it via /api/discover or we could add a specific config endpoint in future.
+    // For now, /api/discover already updates it in backend.
+  }
+
+  async function discoverProjects(path: string) {
+    try {
+      // Optimistic update
+      setDiscoveryRoot(path)
+      
+      const response = await fetch('http://127.0.0.1:8000/api/discover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      })
+      if (!response.ok) throw new Error('Discovery failed')
+      const data = await response.json()
+      return data.projects || []
+    } catch (e) {
+      console.error(e)
+      return []
+    }
+  }
+
+  return { projects, isConnected, connect, addProject, removeProject, discoveryRoot, setDiscoveryRoot, discoverProjects, fetchConfig }
 })
