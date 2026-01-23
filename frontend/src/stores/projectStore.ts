@@ -68,6 +68,8 @@ export const useProjectStore = defineStore('project', () => {
   const projects = ref<Project[]>([])
   const isConnected = ref(false)
   const discoveryRoot = ref('')
+  const searchQuery = ref('')
+  const projectLogs = ref<Record<string, string[]>>({}) // path -> log lines
   let socket: WebSocket | null = null
   let retryTimer: number | null = null
 
@@ -85,6 +87,21 @@ export const useProjectStore = defineStore('project', () => {
       const data = JSON.parse(event.data)
       if (data.projects) {
         projects.value = data.projects
+      } else if (data.type === 'log') {
+        const path = data.path
+        if (path) {
+            console.log(`[Log Stream] ${data.project}: ${data.content}`);
+            if (!projectLogs.value[path]) {
+              projectLogs.value[path] = []
+            }
+            projectLogs.value[path].push(data.content)
+            // Keep last 500 lines
+            if (projectLogs.value[path] && projectLogs.value[path].length > 500) {
+              projectLogs.value[path].shift()
+            }
+        }
+      } else if (data.type === 'log_status') {
+          console.log(`Process for ${data.project} ${data.status}`)
       }
     }
 
@@ -130,6 +147,11 @@ export const useProjectStore = defineStore('project', () => {
   }
 
   async function executeAction(action: string, path: string) {
+    // Clear logs when starting a new session
+    if (action === 'start.bat') {
+        projectLogs.value[path] = []
+    }
+    
     const response = await fetch('http://127.0.0.1:8000/api/projects/action', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -185,6 +207,8 @@ export const useProjectStore = defineStore('project', () => {
     projects,
     isConnected,
     discoveryRoot,
+    searchQuery,
+    projectLogs,
     connect,
     fetchConfig,
     addProject,

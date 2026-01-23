@@ -5,10 +5,20 @@ import ProjectCard from './ProjectCard.vue'
 
 const store = useProjectStore()
 
+// Filtered Projects
+const filteredProjects = computed(() => {
+    if (!store.searchQuery) return store.projects
+    const query = store.searchQuery.toLowerCase()
+    return store.projects.filter(p => 
+        p.name.toLowerCase().includes(query) || 
+        p.path.toLowerCase().includes(query)
+    )
+})
+
 // Categories
-const draftProjects = computed(() => store.projects.filter(p => p.stats.percentage === 0))
-const activeProjects = computed(() => store.projects.filter(p => p.stats.percentage > 0 && p.stats.percentage < 100))
-const completedProjects = computed(() => store.projects.filter(p => p.stats.percentage === 100))
+const draftProjects = computed(() => filteredProjects.value.filter(p => p.stats.percentage === 0))
+const activeProjects = computed(() => filteredProjects.value.filter(p => p.stats.percentage > 0 && p.stats.percentage < 100))
+const completedProjects = computed(() => filteredProjects.value.filter(p => p.stats.percentage === 100))
 </script>
 
 <template>
@@ -17,6 +27,18 @@ const completedProjects = computed(() => store.projects.filter(p => p.stats.perc
       <div v-if="store.projects.length === 0 && store.isConnected" class="text-center py-20">
          <p class="text-lg mb-2 font-display text-primary">No projects monitored yet.</p>
          <p class="text-sm text-secondary">Click "Add Source" to scan and import your task projects.</p>
+      </div>
+      
+      <!-- No Results State -->
+      <div v-else-if="filteredProjects.length === 0 && store.searchQuery" class="text-center py-20 animate-fade-in">
+          <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-void border border-border mb-6">
+              <svg class="w-8 h-8 text-secondary/50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+          </div>
+          <p class="text-lg mb-2 font-display text-primary">No matching projects found</p>
+          <p class="text-sm text-secondary">Try a different search term or clear the filter.</p>
+          <button @click="store.searchQuery = ''" class="mt-6 text-xs text-accent font-bold hover:underline">Clear Search</button>
       </div>
 
       <div v-else class="space-y-16 animate-fade-in-up">

@@ -42,3 +42,7 @@
 
 ## v10.2 - Performance (已完成)
 - [x] 最佳化掃描效能，移除耗時的 LOC 讀取邏輯。
+
+## v10.3 - Intelligence Hub (已完成)
+- [x] 實作 Web Console 支援日誌串流。
+- [x] 實作 Metrics 快取與搜尋過濾功能。

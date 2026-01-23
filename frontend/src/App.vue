@@ -164,22 +164,37 @@ async function handleCreate() {
         </div>
       </div>
 
-      <!-- Navigation Tabs (Segmented Control) -->
-      <div class="bg-surface p-1 rounded-lg flex space-x-1 border border-border">
-          <button 
-            @click="currentView = 'dashboard'"
-            :class="currentView === 'dashboard' ? 'bg-void text-primary shadow-sm border border-border/50' : 'text-secondary hover:text-primary'"
-            class="px-6 py-2 rounded-md text-sm font-medium transition-all duration-300"
-          >
-            Dashboard
-          </button>
-          <button 
-             @click="currentView = 'projects'"
-            :class="currentView === 'projects' ? 'bg-void text-primary shadow-sm border border-border/50' : 'text-secondary hover:text-primary'"
-            class="px-6 py-2 rounded-md text-sm font-medium transition-all duration-300"
-          >
-            Projects
-          </button>
+      <!-- Navigation & Search -->
+      <div class="flex items-center space-x-4">
+          <div class="bg-surface p-1 rounded-lg flex space-x-1 border border-border">
+              <button 
+                @click="currentView = 'dashboard'"
+                :class="currentView === 'dashboard' ? 'bg-void text-primary shadow-sm border border-border/50' : 'text-secondary hover:text-primary'"
+                class="px-6 py-2 rounded-md text-sm font-medium transition-all duration-300"
+              >
+                Dashboard
+              </button>
+              <button 
+                 @click="currentView = 'projects'"
+                :class="currentView === 'projects' ? 'bg-void text-primary shadow-sm border border-border/50' : 'text-secondary hover:text-primary'"
+                class="px-6 py-2 rounded-md text-sm font-medium transition-all duration-300"
+              >
+                Projects
+              </button>
+          </div>
+
+          <!-- Quick Search (v10.3) -->
+          <div class="relative group hidden lg:block">
+              <input 
+                v-model="store.searchQuery"
+                type="text" 
+                placeholder="Search projects..."
+                class="bg-surface border border-border rounded-lg pl-9 pr-4 py-2 text-sm text-primary placeholder-secondary focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/30 transition-all w-48 group-hover:w-64 focus:w-64"
+              />
+              <svg class="absolute left-3 top-2.5 w-4 h-4 text-secondary group-focus-within:text-accent transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+          </div>
       </div>
 
       <div class="flex items-center space-x-6 self-end md:self-auto">

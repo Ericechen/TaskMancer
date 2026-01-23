@@ -5,6 +5,7 @@ import { useProjectStore } from '../stores/projectStore'
 import Swal from 'sweetalert2'
 import DOMPurify from 'dompurify'
 import { marked } from 'marked'
+import LogConsole from './LogConsole.vue'
 
 const props = defineProps<{
   project: Project
@@ -13,6 +14,7 @@ const props = defineProps<{
 const projectStore = useProjectStore()
 const isUnlinking = ref(false)
 const isDeleting = ref(false)
+const showConsole = ref(false)
 
 async function handleUnlink(path: string) {
     const result = await Swal.fire({
@@ -81,6 +83,9 @@ async function handleDelete(path: string) {
 
 async function handleAction(action: string, path: string) {
   try {
+    if (action === 'start.bat') {
+        showConsole.value = true
+    }
     await projectStore.executeAction(action, path)
   } catch (e: any) {
     Swal.fire('Action Failed', e.message, 'error')
@@ -163,10 +168,12 @@ async function handleInfo(path: string) {
     }
 }
 
+/*
 function formatNumber(num?: number): string {
     if (num === undefined) return '0'
     return new Intl.NumberFormat().format(num)
 }
+*/
 
 function formatSize(bytes?: number): string {
     if (bytes === undefined) return '0 B'
@@ -312,6 +319,16 @@ function formatSize(bytes?: number): string {
         >
           Info
         </button>
+        <button 
+          @click="showConsole = true"
+          class="flex items-center px-4 py-1.5 rounded-lg bg-surface/50 border border-white/5 text-secondary text-xs font-bold hover:bg-white/5 hover:text-accent transition-all shadow-sm"
+          title="View Live Logs"
+        >
+          <svg class="w-3.5 h-3.5 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 00-2 2z" />
+          </svg>
+          Logs
+        </button>
 
         <div class="relative ml-auto">
             <input 
@@ -442,6 +459,16 @@ function formatSize(bytes?: number): string {
           </div>
         </Transition>
     </div>
+
+    <!-- Log Console Modal (v10.3) -->
+    <Teleport to="body">
+        <LogConsole 
+            :isOpen="showConsole" 
+            :projectPath="project.path" 
+            :projectName="project.name"
+            @close="showConsole = false"
+        />
+    </Teleport>
   </div>
 </template>
 

@@ -39,6 +39,73 @@ app.add_middleware(
 class RootPathRequest(BaseModel):
     path: str
 
+class RunningProcess:
+    def __init__(self, project_path: str, name: str, connection_manager):
+        self.project_path = project_path
+        self.name = name
+        self.process = None
+        self.connection_manager = connection_manager
+        self.is_running = False
+
+    async def start(self, cmd: str, env: dict):
+        try:
+            import subprocess
+            self.process = await asyncio.create_subprocess_shell(
+                cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+                cwd=self.project_path,
+                env={**os.environ, **env},
+                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == 'nt' else 0
+            )
+            self.is_running = True
+            asyncio.create_task(self.read_logs())
+            logger.info(f"Started managed process for {self.name}")
+        except Exception as e:
+            logger.error(f"Failed to start process for {self.name}: {e}")
+
+    async def read_logs(self):
+        logger.info(f"Log reader started for {self.name}")
+        while self.is_running:
+            try:
+                # Use read() instead of readline() to catch partial lines and handle unusual buffering
+                chunk = await self.process.stdout.read(4096)
+                if not chunk:
+                    logger.info(f"Log stream ended for {self.name}")
+                    break
+                
+                text = chunk.decode('utf-8', errors='ignore')
+                lines = text.splitlines()
+                
+                for line in lines:
+                    if line.strip():
+                        await self.connection_manager.broadcast({
+                            "type": "log",
+                            "project": self.name,
+                            "path": self.project_path,
+                            "content": line
+                        })
+            except Exception as e:
+                logger.error(f"Error reading logs for {self.name}: {e}")
+                break
+        
+        self.is_running = False
+        await self.connection_manager.broadcast({
+            "type": "log_status",
+            "project": self.name,
+            "path": self.project_path,
+            "status": "stopped"
+        })
+
+    def stop(self):
+        if self.process:
+            import signal
+            if os.name == 'nt':
+                os.kill(self.process.pid, signal.CTRL_BREAK_EVENT)
+            else:
+                self.process.terminate()
+            self.is_running = False
+
 # --- Global State ---
 class ConnectionManager:
     def __init__(self):
@@ -72,6 +139,9 @@ class ProjectManager:
         self.config_file = "projects.json"
         self.discovery_root = ""
         self.watches = {} # Map path -> ObservedWatch
+        self.metrics_cache = {} # path -> metrics_data
+        self.dirty_metrics = set() # paths that need metrics re-scan
+        self.active_processes: Dict[str, RunningProcess] = {} # path -> RunningProcess
 
     def start_watcher(self):
         self.event_handler = DebouncedEventHandler(
@@ -157,7 +227,7 @@ class ProjectManager:
         self.discovery_root = path
         self.save_projects()
 
-    async def get_current_state(self) -> Dict[str, Any]:
+    async def get_current_state(self, force_metrics_paths: Set[str] = None) -> Dict[str, Any]:
         """Scans all watched roots asynchronously."""
         all_projects_data = []
         parser = TaskParser()
@@ -174,7 +244,8 @@ class ProjectManager:
             
             for meta in projects_meta:
                 try:
-                    path_obj = Path(meta['path'])
+                    project_path = meta['path']
+                    path_obj = Path(project_path)
                     parsed = parser.parse_file(meta['task_file'])
                     
                     try:
@@ -193,15 +264,29 @@ class ProjectManager:
                     # Links: config.md (Priority) > task.md (Fallback)
                     final_links = project_config.get('links') or parsed.get('links', [])
 
-                    git_helper = GitHelper(meta['path'])
+                    git_helper = GitHelper(project_path)
                     git_snapshot = git_helper.get_repo_snapshot()
                     git_momentum = git_helper.get_momentum_score()
-                    health_report = get_project_health_report(meta['path'])
+                    
+                    # Metrics Caching (v10.3)
+                    should_refresh_metrics = (
+                        project_path not in self.metrics_cache or 
+                        (force_metrics_paths and project_path in force_metrics_paths) or
+                        project_path in self.dirty_metrics
+                    )
+
+                    if should_refresh_metrics:
+                        health_report = get_project_health_report(project_path)
+                        self.metrics_cache[project_path] = health_report
+                        if project_path in self.dirty_metrics:
+                            self.dirty_metrics.remove(project_path)
+                    else:
+                        health_report = self.metrics_cache[project_path]
                     
                     # Async Live Status with Explicit Ports (Safe Mode)
                     try:
                         live_report = await get_live_report_async(
-                            meta['path'], 
+                            project_path, 
                             explicit_ports=project_config.get('explicit_ports')
                         )
                     except Exception as e:
@@ -210,11 +295,11 @@ class ProjectManager:
 
                     root_projects.append({
                         "name": meta['name'],
-                        "path": meta['path'],
+                        "path": project_path,
                         "stats": parsed['stats'],
                         "tasks": parsed['tasks'],
                         "links": final_links, 
-                        "hasConfig": has_config, # Added in v8.6
+                        "hasConfig": has_config,
                         "hasStartBat": has_start_bat,
                         "hasReadme": has_readme,
                         "git": git_snapshot,
@@ -225,13 +310,9 @@ class ProjectManager:
                     })
                 except Exception as e:
                     logger.error(f"Failed to process project {meta['name']}: {e}")
-                    # Optionally add a 'corrupted' state project here if needed, 
-                    # but skipping it is safer for stability
                     continue
             return root_projects
 
-        # Run all root scans in parallel
-        # return_exceptions=True ensures one root failure doesn't crash the whole gather
         results = await asyncio.gather(*(scan_root(r) for r in current_roots), return_exceptions=True)
         for r_list in results:
             if isinstance(r_list, Exception):
@@ -241,8 +322,8 @@ class ProjectManager:
             
         return {"projects": all_projects_data}
 
-    async def notify_clients(self):
-        state = await self.get_current_state()
+    async def notify_clients(self, force_metrics_paths: Set[str] = None):
+        state = await self.get_current_state(force_metrics_paths=force_metrics_paths)
         await self.connection_manager.broadcast(state)
 
 project_manager = ProjectManager()
@@ -342,22 +423,44 @@ async def run_project_action(request: CommandRequest):
             return {"status": "success", "message": "Antigravity opened"}
             
         elif request.action == "start.bat":
-            # Windows: start dev in a NEW terminal window
-            logger.info(f"Command execution request for: {path}")
+            # Managed Start with Log Streaming (v10.3)
+            logger.info(f"Managed start request for: {path}")
             
-            # 獲取配置並轉換為環境變數 (v8.0)
+            # Check if already running
+            if str(path) in project_manager.active_processes:
+                proc = project_manager.active_processes[str(path)]
+                if proc.is_running:
+                    return {"status": "already_running", "message": "Process is already streaming logs."}
+
             config_path = path / "config.md"
             env_vars = ConfigParser.get_env_vars(str(config_path)) if config_path.exists() else {}
             
-            # 構建 SET 指令字串
-            env_set_cmds = " && ".join([f"SET {k}={v}" for k, v in env_vars.items()])
-            env_prefix = f"{env_set_cmds} && " if env_set_cmds else ""
+            # Find the project name for logging
+            project_name = path.name
+            for root in project_manager.watched_roots:
+                scanner = DirectoryScanner(root)
+                meta = next((m for m in scanner.scan() if m['path'] == str(path)), None)
+                if meta:
+                    project_name = meta['name']
+                    break
+
+            proc = RunningProcess(str(path), project_name, project_manager.connection_manager)
+            project_manager.active_processes[str(path)] = proc
             
-            # 使用 start cmd /k 執行，並注入環境變數
-            full_shell_cmd = f'start cmd /k "cd /d \u0022{path}\u0022 && {env_prefix}start.bat"'
-            os.system(full_shell_cmd)
-            return {"status": "success", "message": f"Started with start.bat (Envs injected: {len(env_vars)})"}
+            # Execute start.bat with explicit path and CI environment
+            # Note: create_subprocess_shell on Windows already uses 'cmd /c'
+            # We only need to provide the quoted path to the batch file
+            abs_bat_path = os.path.abspath(os.path.join(str(path), "start.bat"))
+            await proc.start(f'"{abs_bat_path}"', {**env_vars, "CI": "true"})
             
+            return {"status": "success", "message": "Process started with streaming logs"}
+            
+        elif request.action == "stop":
+            if str(path) in project_manager.active_processes:
+                project_manager.active_processes[str(path)].stop()
+                return {"status": "success", "message": "Process stopped"}
+            return {"status": "not_running", "message": "No active process for this path"}
+
         else:
             raise HTTPException(status_code=400, detail="Unknown action")
             

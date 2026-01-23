@@ -182,4 +182,9 @@
 ## v10.2.0 - Performance Optimization (已完成)
 - [x] 移除實時 LOC (Lines of Code) 計算，大幅減少專案載入時的檔案 I/O 壓力。
 
+## v10.3.0 - Intelligence & Monitoring (已完成)
+- [x] **實時日誌串流 (Service Log Streaming)**：支援 `start.bat` 執行過程的 stdout/stderr 實時回傳至 Web 端輸出盤。
+- [x] **Metrics 增量更新與快取**：實作 Metrics 快取，僅在偵測到結構性變更（檔案建立/刪除）時才重新計算 Size 與 FileCount。
+- [x] **全域搜尋與過濾**：在 UI 加入搜尋功能，支援按名稱或路徑搜尋專案。
+
 [Link]: https://github.com/Ericechen/TaskMancer
