@@ -38,10 +38,20 @@
 | **US-2** | 開發者 | 在編輯器中按下 Ctrl+S (觸發原子存檔) | 系統過濾掉刪除/移動等雜訊事件，在 500ms 內正確刷新 Dashboard。 | P0 |
 | **US-3** | 使用者 | 定義巢狀任務 (父任務 \> 子任務) | Dashboard 能夠以縮排或樹狀結構顯示任務，且進度條計算能反映真實完成度。 | P0 |
 | **US-4** | 使用者 | 查看總表 | 能一目了然哪些專案是「進行中 (Active)」、「卡關 (Stuck)」或「已完成」。 | P1 |
+| **US-5** | 使用者 | 新增專案路徑 | 在前端輸入路徑後，後端自動掃描該路徑並納入監控，無需重啟程式。 | P1 |
 
 ## **3\. 功能需求 (Functional Requirements)**
 
 ### **3.1 核心邏輯 (Backend \- Python)**
+
+*   **動態專案管理 (Dynamic Project Manager)**
+    *   **狀態保存**：維護一個 `watched_roots` 列表 (在記憶體中，或 MVP 不需持久化)。
+    *   **API**:
+        *   `POST /api/roots`: 接收 `{ path: str }`。
+        *   驗證路徑存在。
+        *   觸發 `DirectoryScanner` 掃描新路徑。
+        *   為新路徑註冊 Watcher。
+        *   廣播更新後的專案列表。
 
 * **工作區掃描器 (Workspace Scanner)**  
   * **輸入**：啟動參數 \--root \<path\>。  

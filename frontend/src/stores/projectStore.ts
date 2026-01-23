@@ -31,7 +31,7 @@ export const useProjectStore = defineStore('project', () => {
     if (socket) return
 
     // Assuming backend is on localhost:8000 based on main.py
-    socket = new WebSocket('ws://localhost:8000/ws')
+    socket = new WebSocket('ws://127.0.0.1:8000/ws')
 
     socket.onopen = () => {
       isConnected.value = true
@@ -66,5 +66,24 @@ export const useProjectStore = defineStore('project', () => {
     }
   }
 
-  return { projects, isConnected, connect }
+  async function addProject(path: string) {
+    try {
+      const response = await fetch('http://127.0.0.1:8000/api/roots', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ path }),
+      })
+      if (!response.ok) {
+        throw new Error('Failed to add project')
+      }
+      return true
+    } catch (e) {
+      console.error(e)
+      return false
+    }
+  }
+
+  return { projects, isConnected, connect, addProject }
 })

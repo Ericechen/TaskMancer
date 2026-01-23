@@ -1,9 +1,12 @@
 import asyncio
 import argparse
 import logging
-from typing import List, Dict, Any
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+import os
+from typing import List, Dict, Any, Set
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
 from scanner import DirectoryScanner
@@ -25,7 +28,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Global State
+# --- Models ---
+class RootPathRequest(BaseModel):
+    path: str
+
+# --- Global State ---
 class ConnectionManager:
     def __init__(self):
         self.active_connections: List[WebSocket] = []
@@ -46,95 +53,166 @@ class ConnectionManager:
             except Exception as e:
                 logger.error(f"Error sending message: {e}")
 
-manager = ConnectionManager()
-args = None
-observer = None
+import json
 
-def get_current_state() -> Dict[str, Any]:
-    """Scans and parses all projects to generate the current state."""
-    scanner = DirectoryScanner(args.root)
-    projects_meta = scanner.scan()
-    
-    parser = TaskParser()
-    projects_data = []
-    
-    for meta in projects_meta:
-        parsed = parser.parse_file(meta['task_file'])
-        projects_data.append({
-            "name": meta['name'],
-            "path": meta['path'],
-            "stats": parsed['stats'],
-            "tasks": parsed['tasks']
-        })
+class ProjectManager:
+    def __init__(self):
+        self.watched_roots: Set[str] = set()
+        self.connection_manager = ConnectionManager()
+        self.observer = Observer()
+        self.event_handler = None
+        self.config_file = "projects.json"
+
+    def start_watcher(self):
+        self.event_handler = DebouncedEventHandler(
+            loop=asyncio.get_running_loop(),
+            callback=self.notify_clients,
+            debounce_seconds=0.5
+        )
+        self.observer.start()
+        self.load_projects()
+
+    def stop_watcher(self):
+        if self.observer:
+            self.observer.stop()
+            self.observer.join()
+
+    def load_projects(self):
+        if not os.path.exists(self.config_file):
+            return
+
+        try:
+            with open(self.config_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                paths = data.get('roots', [])
+                logger.info(f"Loading {len(paths)} projects from config.")
+                for path in paths:
+                    try:
+                        self.add_root(path, save=False)
+                    except Exception as e:
+                        logger.error(f"Failed to load project {path}: {e}")
+        except Exception as e:
+            logger.error(f"Error loading config: {e}")
+
+    def save_projects(self):
+        try:
+            with open(self.config_file, 'w', encoding='utf-8') as f:
+                json.dump({"roots": list(self.watched_roots)}, f, indent=2)
+            logger.info("Projects configuration saved.")
+        except Exception as e:
+            logger.error(f"Error saving config: {e}")
+
+    def add_root(self, path: str, save: bool = True):
+        abs_path = os.path.abspath(path)
+        if not os.path.exists(abs_path):
+            raise FileNotFoundError(f"Path does not exist: {path}")
+
+        if abs_path in self.watched_roots:
+            return # Already watched
+
+        logger.info(f"Adding root: {abs_path}")
+        self.watched_roots.add(abs_path)
         
-    return {"projects": projects_data}
+        # Schedule watcher for this new path
+        # If watcher isn't started yet (e.g. during init before startup), we might skip this
+        # But load_projects is called in start_watcher, so event_handler exists.
+        if self.event_handler:
+            self.observer.schedule(self.event_handler, abs_path, recursive=True)
+        
+        # Trigger immediate update if not loading
+        if save:
+            self.save_projects()
+            asyncio.create_task(self.notify_clients())
 
-async def notify_clients():
-    """Callback triggered by Watcher."""
-    logger.info("Changes detected. Broadcasting update...")
-    state = get_current_state()
-    await manager.broadcast(state)
+    def get_current_state(self) -> Dict[str, Any]:
+        """Scans all watched roots."""
+        all_projects_data = []
+        parser = TaskParser()
+
+        for root in self.watched_roots:
+            scanner = DirectoryScanner(root)
+            projects_meta = scanner.scan()
+            
+            for meta in projects_meta:
+                parsed = parser.parse_file(meta['task_file'])
+                # Avoid duplicates if nested roots? 
+                # For MVP we just list them. Frontend can dedupe by path.
+                all_projects_data.append({
+                    "name": meta['name'],
+                    "path": meta['path'],
+                    "stats": parsed['stats'],
+                    "tasks": parsed['tasks']
+                })
+        
+        # Sort by Name for consistency
+        all_projects_data.sort(key=lambda x: x['name'])
+        
+        return {"projects": all_projects_data}
+
+    async def notify_clients(self):
+        logger.info("Changes detected or Root added. Broadcasting update...")
+        state = self.get_current_state()
+        await self.connection_manager.broadcast(state)
+
+# Initialize Global Manager
+project_manager = ProjectManager()
 
 @app.on_event("startup")
 async def startup_event():
-    global observer
+    project_manager.start_watcher()
     
-    # Initialize Watcher
-    logger.info(f"Starting watcher on root: {args.root}")
-    event_handler = DebouncedEventHandler(
-        loop=asyncio.get_running_loop(),
-        callback=notify_clients,
-        debounce_seconds=0.5
-    )
-    
-    observer = Observer()
-    observer.schedule(event_handler, args.root, recursive=True)
-    observer.start()
+    # Add initial root from args if provided
+    if args and args.root:
+        try:
+            project_manager.add_root(args.root)
+        except Exception as e:
+            logger.error(f"Failed to add initial root: {e}")
 
 @app.on_event("shutdown")
 def shutdown_event():
-    if observer:
-        observer.stop()
-        observer.join()
+    project_manager.stop_watcher()
+
+# --- API Endpoints ---
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    await manager.connect(websocket)
+    await project_manager.connection_manager.connect(websocket)
     try:
-        # Send initial state immediately
-        await websocket.send_json(get_current_state())
-        
+        # Send initial state
+        await websocket.send_json(project_manager.get_current_state())
         while True:
-            # Keep alive
             await websocket.receive_text()
     except WebSocketDisconnect:
-        manager.disconnect(websocket)
+        project_manager.connection_manager.disconnect(websocket)
+
+@app.post("/api/roots")
+async def add_root_path(request: RootPathRequest):
+    try:
+        project_manager.add_root(request.path)
+        return {"status": "success", "watched_roots": list(project_manager.watched_roots)}
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Directory not found")
+    except Exception as e:
+        logger.error(f"Error adding root: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
     
-    # Parse CLI Args manually if running directly, 
-    # but Uvicorn usually runs the app object.
-    # To support `python main.py --root X`, we need a wrapper or handle it globally.
-    # For simplicity, we use argparse here and set it to global `args`.
-    
     parser = argparse.ArgumentParser()
-    parser.add_argument("--root", default=".", help="Root directory to scan")
+    parser.add_argument("--root", help="Initial root directory to scan")
     parsed_args, _ = parser.parse_known_args()
-    args = parsed_args # Set global
+    args = parsed_args
     
-    # Note: When running via `uvicorn main:app`, this block isn't executed, 
-    # and `args` will be None. We need a way to pass args.
-    # PROPER WAY: Read Environment Variable or Default to '.' if args is None.
+    # If running directly, we might need to patch uvicorn run to use this 'app' instance
+    # keeping global args accessible.
     
     uvicorn.run(app, host="0.0.0.0", port=8000)
 else:
-    # If running via uvicorn command line, we default to current directory 
-    # or need a pattern to inject configuration.
-    # Let's fallback to "current working directory" if args is None.
-    if args is None:
-        import sys
-        # Trivial mock for args
-        class Args:
-            root = "." 
-        args = Args()
+    # Uvicorn worker mode
+    # We need a way to pass args if run via command line, usually via ENV
+    # For now, default args to None
+    args = None
+    # If we want to support --root via uvicorn command line args, it's tricky.
+    # We'll assume the API is the primary way to add roots dynamically, 
+    # or rely on hardcoded default for dev.

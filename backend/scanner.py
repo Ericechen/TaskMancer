@@ -35,11 +35,13 @@ class DirectoryScanner:
             # Modify dirs in-place to skip ignored directories
             dirs[:] = [d for d in dirs if d not in self.ignored_dirs]
 
-            if 'task.md' in files:
+            # Case insensitive check for task.md
+            task_files = [f for f in files if f.lower() == 'task.md']
+            if task_files:
                 projects.append({
                     'name': current_path.name if current_path != self.root_path else self.root_path.name,
                     'path': str(current_path),
-                    'task_file': str(current_path / 'task.md')
+                    'task_file': str(current_path / task_files[0])
                 })
                 
         return projects
