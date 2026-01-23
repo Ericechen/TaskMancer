@@ -53,7 +53,7 @@ async function handleScan() {
         title: 'No Projects Found',
         html: `
             <div class="text-sm text-secondary mb-4">We couldn't find any <code>task.md</code> files in the immediate subdirectories of:</div>
-            <div class="bg-black/20 p-3 rounded border border-white/5 font-mono text-[10px] break-all opacity-70">${discoveryPath.value}</div>
+            <div class="bg-black/20 p-3 rounded border border-white/5 font-mono text-[10px] break-all opacity-85">${discoveryPath.value}</div>
         `
     })
     return
@@ -160,7 +160,7 @@ async function handleCreate() {
             <h1 class="text-3xl font-display font-bold text-primary tracking-tighter group-hover:text-accent transition-colors duration-300">
                 TaskMancer
             </h1>
-            <p class="text-xs text-secondary font-mono mt-1 tracking-widest uppercase">Project Intelligence_v4.7.0</p>
+            <p class="text-xs text-secondary font-mono mt-1 tracking-widest uppercase">Project Intelligence_v10.0.0</p>
         </div>
       </div>
 
@@ -310,7 +310,7 @@ async function handleCreate() {
                 </div>
                 <div class="min-w-0 flex-1">
                     <div class="font-bold text-primary text-sm">{{ proj.name }}</div>
-                    <div class="text-xs text-secondary font-mono truncate opacity-60">{{ proj.path }}</div>
+                    <div class="text-xs text-secondary font-mono truncate opacity-80">{{ proj.path }}</div>
                 </div>
                 <div v-if="store.projects.some(p => p.path === proj.path)" class="ml-auto text-[10px] uppercase font-bold text-secondary tracking-wider">
                     Linked

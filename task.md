@@ -84,4 +84,95 @@
 - [x] Frontend: 重新設計專案卡片佈局，將技術指標移至 Footer
 - [x] Frontend: 精細調校診斷列與進度條之間的垂直間距
 
+## v7.0 - Live Detection: 虛擬與現實的橋樑 (已完成)
+- [x] Backend: 實作 `PortScanner` 偵測本機埠口佔用
+- [x] Backend: 實作 `DependencyAuditor` 分析依賴健康度
+- [x] Frontend: 專案卡片顯示活動 Port 標籤並支援點擊跳轉
+
+## v7.3 - Hotfix: 恢復遺失的前端邏輯與修復渲染崩潰 (已完成)
+- [x] Frontend: 恢復 `projectStore` 中遺失的 `fetchConfig`, `discoverProjects`執 等方法
+- [x] Frontend: 修復 `ProjectCard.vue` 中的 `isUnlinking.ref` 語法錯誤
+
+## v7.5 - Explicit Config: 精確埠口定義 (已完成)
+- [x] Backend: 實作 `config.md` 解析器並支援語義標籤 (`Port : Frontend : 5173`)
+- [x] Backend: 升級 `live_utils` 支援精確埠口探測 (Explicit Port Scan)
+- [x] Frontend: `ProjectCard.vue` 顯示對應的埠口標籤 (Label)
+
+## v8.0 - Dynamic Orchestration: 動態編排 (已完成)
+- [x] Backend: 啟動專案時自動注入 `TM_PORT_[LABEL]` 環境變數
+- [x] Backend: `main.py` 支援 `--port` 參數接收動態埠口
+- [x] DevOps: 更新專案 `start.bat` 示範環璄變數動態接軌
+
+## v8.5 - Service Monitoring: 服務狀態燈號 (已完成)
+- [x] Backend: `PortScanner` 返回包含 `online/offline` 狀態的完整列表
+- [x] Frontend: `ProjectCard.vue` 實作狀態燈號 (綠色呼吸燈 = Online, 灰色 = Offline)
+
+## v8.6 - Hotfix: 修復偵測失效與 UI 條件渲染 (已完成)
+- [x] Backend: 修復 `live_utils.py` 中的 `reader/writer` 解析錯誤（解決 Vue 偵測不到的問題）
+- [x] Backend: 導出 `hasConfig` 標記至前端
+- [x] Frontend: 僅在具備 `config.md` 的專案顯示服務狀態區塊
+
+## v9.0 - UI 精緻化 (README 面板美化) (已完成)
+- [x] 重新設計 README 彈窗介面 (Glassmorphism & Better Typography)
+- [x] 優化 Markdown 渲染樣式 (tm-readme-content)
+- [x] 新增彈窗動畫與佈局調整
+
+## v9.2 - UI 修正 (埠口顯示邏輯優化) (已完成)
+- [x] 移除前端顯示 Port 的 `hasConfig` 限制
+- [x] 調整後端 PortScanner 確保沒配置時也能正確顯示常用埠口
+- [x] 優化燈號顯示邏輯
+
+## v9.3 - UI 修正 (更正埠口顯示邏輯) (已完成)
+- [x] 恢復前端 `hasConfig` 顯示限制，避免無配置專案誤報
+- [x] 關閉後端 `PortScanner` 的全域備用掃描 (COMMON_DEV_PORTS)
+- [x] 確保精確顯示已定義的埠口狀態
+
+[Link]: https://github.com/Ericechen/TaskMancer
+
+## v9.4 - Bug Fix (配置解析與掃描增強) (已完成)
+- [x] 優化 `config_parser` 正則表達式，支援更寬鬆的語法
+- [x] 增強 `PortScanner` 連線能力 (Localhost 優先 + Timeout 放寬)
+- [x] 後端掃描加入錯誤防護 (Safe Mode Scan)
+
+## v9.5 - Hotfix (恢復 127.0.0.1 掃描) (已完成)
+- [x] 修正 `live_utils.py`: 恢復使用 IP 直連，解決 Windows Localhost 解析導致的 API 卡死問題
+- [x] 確保前端能正確獲取後端資料
+ 
+ ## v9.6 - Stability (全域異常防護) (已完成)
+ - [x] `main.py`: 實作 `scan_root` 層級的異常隔離，防止單一專案解析失敗導致 WebSocket 斷線
+ - [x] `asyncio.gather`: 啟用 `return_exceptions=True` 避免 Root 掃描崩潰
+
+## v9.7 - Protocol Support (IPv6 支援) (已完成)
+- [x] `PortScanner` 支援雙協議掃描 (IPv4 First, IPv6 Fallback)
+- [x] 解決 Vite 預設綁定 `::1` 導致的偵測失效問題
+
+## v9.8 - Persistence Fix (自動載入修復) (已完成)
+- [x] `main.py`: 加入 Startup Event，確保伺服器啟動時自動讀取 `projects.json`
+- [x] 解決重啟後專案列表清空的問題
+
+## v9.9 - UI Layout (狀態列分層優化) (已完成)
+- [x] 將 ProjectCard 狀態指示器重構為雙層結構
+- [x] Row 1: Git Info (Branch, Sync, Changes, Momentum)
+- [x] Row 2: Live Ports (Frontend, Backend)
+
+
+## v9.10 - UI Layout Optimization (已完成)
+- [x] 修正 Git 資訊列寬度，移除多餘邊距使其與內容容器等寬
+- [x] 重構 Header 佈局，將防撞邊距 (pr-16) 精確套用於標題區域
+
+
+## v9.11 - UI Readability Optimization (已完成)
+- [x] 調亮專案指標 (LOC, Size, Files) 的文字顏色 (opacity 40% -> 60%)
+- [x] 全面提升低對比度次要文字的亮度 (包含任務進度標籤、已完成任務文字等)
+
+## v9.12 - Extreme Readability & High Contrast (已完成)
+- [x] 二次大幅調亮所有次要文字透明度 (opacity 60% -> 80% / 80% -> 90%)
+- [x] 全面掃描並移除所有低於 70% 透明度的關鍵資訊文字
+
+
+## v10.0.0 - The Convergence (已完成)
+- [x] 彙整 v9.x 系列所有 Bug Fix 與 UI 優化
+- [x] 全站配色與亮度二次調校完成
+- [x] 正式同步 package.json 與 UI 版本號
+
 [Link]: https://github.com/Ericechen/TaskMancer

@@ -108,7 +108,7 @@ const quickWins = computed(() => {
                     <div v-for="proj in focusProjects" :key="proj.path" class="flex justify-between items-center group py-2 border-b border-border/50 hover:border-accent/50 transition-colors cursor-default">
                         <div class="min-w-0 pr-4">
                             <div class="font-display font-medium text-primary text-lg group-hover:text-accent transition-colors truncate">{{ proj.name }}</div>
-                            <div class="text-[10px] text-secondary font-mono truncate opacity-60">{{ proj.path }}</div>
+                            <div class="text-[10px] text-secondary font-mono truncate opacity-80">{{ proj.path }}</div>
                         </div>
                         <div class="text-right flex-shrink-0">
                              <div class="text-2xl font-display font-light text-primary group-hover:text-danger conversion-colors">

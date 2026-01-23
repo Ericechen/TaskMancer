@@ -3,6 +3,7 @@ import argparse
 import logging
 import os
 import shutil
+import json
 from pathlib import Path
 from typing import List, Dict, Any, Set
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, File, UploadFile, Form
@@ -16,6 +17,8 @@ from watcher_service import DebouncedEventHandler
 from task_parser import TaskParser
 from git_utils import GitHelper
 from health_utils import get_project_health_report
+from live_utils import get_live_report_async
+from config_parser import ConfigParser
 
 # Configure Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -47,17 +50,18 @@ class ConnectionManager:
         logger.info(f"Client connected. Total: {len(self.active_connections)}")
 
     def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
         logger.info(f"Client disconnected. Total: {len(self.active_connections)}")
 
     async def broadcast(self, message: dict):
-        for connection in self.active_connections:
+        for connection in list(self.active_connections):
             try:
                 await connection.send_json(message)
             except Exception as e:
                 logger.error(f"Error sending message: {e}")
-
-import json
+                if connection in self.active_connections:
+                    self.active_connections.remove(connection)
 
 class ProjectManager:
     def __init__(self):
@@ -140,7 +144,10 @@ class ProjectManager:
         self.watched_roots.remove(abs_path)
         
         if abs_path in self.watches:
-            self.observer.unschedule(self.watches[abs_path])
+            try:
+                self.observer.unschedule(self.watches[abs_path])
+            except:
+                pass
             del self.watches[abs_path]
             
         self.save_projects()
@@ -150,141 +157,152 @@ class ProjectManager:
         self.discovery_root = path
         self.save_projects()
 
-    def get_current_state(self) -> Dict[str, Any]:
-        """Scans all watched roots."""
+    async def get_current_state(self) -> Dict[str, Any]:
+        """Scans all watched roots asynchronously."""
         all_projects_data = []
         parser = TaskParser()
 
-        # Create a snapshot to iterate safely
         current_roots = list(self.watched_roots)
 
-        for root in current_roots:
-            # Check if exists before scanning to avoid crashing if deleted externally
+        async def scan_root(root):
+            root_projects = []
             if not os.path.exists(root):
-                continue
-
+                return []
+            
             scanner = DirectoryScanner(root)
             projects_meta = scanner.scan()
             
             for meta in projects_meta:
-                path_obj = Path(meta['path'])
-                parsed = parser.parse_file(meta['task_file'])
-                
-                # Check for files (case-insensitive)
                 try:
-                    all_files = os.listdir(path_obj)
-                    files_lower = [f.lower() for f in all_files]
+                    path_obj = Path(meta['path'])
+                    parsed = parser.parse_file(meta['task_file'])
                     
-                    has_start_bat = 'start.bat' in files_lower
-                    # Support readme.md, readme.markdown, readme.txt, or just readme
-                    has_readme = any(f.startswith('readme') for f in files_lower)
+                    try:
+                        all_files = os.listdir(path_obj)
+                        files_lower = [f.lower() for f in all_files]
+                        has_start_bat = 'start.bat' in files_lower
+                        has_readme = any(f.startswith('readme') for f in files_lower)
+                    except:
+                        has_start_bat = has_readme = False
+
+                    # Check for config.md (v7.5)
+                    config_path = os.path.join(path_obj, "config.md")
+                    has_config = os.path.exists(config_path)
+                    project_config = ConfigParser.parse_file(config_path) if has_config else {}
                     
-                    logger.info(f"Scan {meta['name']}: bat={has_start_bat}, readme={has_readme} (Files: {len(all_files)})")
+                    # Links: config.md (Priority) > task.md (Fallback)
+                    final_links = project_config.get('links') or parsed.get('links', [])
+
+                    git_helper = GitHelper(meta['path'])
+                    git_snapshot = git_helper.get_repo_snapshot()
+                    git_momentum = git_helper.get_momentum_score()
+                    health_report = get_project_health_report(meta['path'])
+                    
+                    # Async Live Status with Explicit Ports (Safe Mode)
+                    try:
+                        live_report = await get_live_report_async(
+                            meta['path'], 
+                            explicit_ports=project_config.get('explicit_ports')
+                        )
+                    except Exception as e:
+                        logger.error(f"Live report failed for {meta['name']}: {e}")
+                        live_report = {"active_ports": [], "dependency_audit": {"status": "error"}}
+
+                    root_projects.append({
+                        "name": meta['name'],
+                        "path": meta['path'],
+                        "stats": parsed['stats'],
+                        "tasks": parsed['tasks'],
+                        "links": final_links, 
+                        "hasConfig": has_config, # Added in v8.6
+                        "hasStartBat": has_start_bat,
+                        "hasReadme": has_readme,
+                        "git": git_snapshot,
+                        "momentum": git_momentum,
+                        "health": health_report['health'],
+                        "metrics": health_report['metrics'],
+                        "live": live_report
+                    })
                 except Exception as e:
-                    logger.error(f"Error listing files in {path_obj}: {e}")
-                    has_start_bat = False
-                    has_readme = False
+                    logger.error(f"Failed to process project {meta['name']}: {e}")
+                    # Optionally add a 'corrupted' state project here if needed, 
+                    # but skipping it is safer for stability
+                    continue
+            return root_projects
 
-                # Git Stats
-                git_helper = GitHelper(meta['path'])
-                git_snapshot = git_helper.get_repo_snapshot()
-                git_momentum = git_helper.get_momentum_score()
-
-                # Health & Metrics
-                health_report = get_project_health_report(meta['path'])
-
-                all_projects_data.append({
-                    "name": meta['name'],
-                    "path": meta['path'],
-                    "stats": parsed['stats'],
-                    "tasks": parsed['tasks'],
-                    "links": parsed.get('links', []),
-                    "hasStartBat": has_start_bat,
-                    "hasReadme": has_readme,
-                    "git": git_snapshot,
-                    "momentum": git_momentum,
-                    "health": health_report['health'],
-                    "metrics": health_report['metrics']
-                })
-        
-        all_projects_data.sort(key=lambda x: x['name'])
-        
+        # Run all root scans in parallel
+        # return_exceptions=True ensures one root failure doesn't crash the whole gather
+        results = await asyncio.gather(*(scan_root(r) for r in current_roots), return_exceptions=True)
+        for r_list in results:
+            if isinstance(r_list, Exception):
+                logger.error(f"Root scan failed: {r_list}")
+                continue
+            all_projects_data.extend(r_list)
+            
         return {"projects": all_projects_data}
 
     async def notify_clients(self):
-        logger.info("Changes detected or Root added. Broadcasting update...")
-        state = self.get_current_state()
+        state = await self.get_current_state()
         await self.connection_manager.broadcast(state)
 
-# Initialize Global Manager
 project_manager = ProjectManager()
 
-@app.post("/api/projects/create")
-async def create_project(
-    parent_path: str = Form(...),
-    name: str = Form(...),
-    file: UploadFile = File(None)
-):
-    try:
-        # Validate inputs
-        if not parent_path or not name:
-            raise HTTPException(status_code=400, detail="Parent path and project name are required")
-            
-        parent = Path(parent_path)
-        if not parent.exists() or not parent.is_dir():
-            raise HTTPException(status_code=400, detail="Invalid parent directory")
-            
-        # Create project directory
-        project_path = parent / name
-        if project_path.exists():
-            raise HTTPException(status_code=400, detail="project name exist")
-            
-        os.makedirs(project_path)
-        
-        # Save task.md (or create default)
-        file_path = project_path / "task.md"
-        if file:
-            with open(file_path, "wb") as buffer:
-                shutil.copyfileobj(file.file, buffer)
-        else:
-            # Create default empty template
-            with open(file_path, "w", encoding="utf-8") as f:
-                f.write(f"# {name}\n\n- [ ] Initial Task")
-            
-        # Register project
-        # We add the specific project path as a root
-        project_manager.add_root(str(project_path))
-        
-        return {"status": "success", "path": str(project_path), "message": f"Project '{name}' created successfully"}
-        
-    except Exception as e:
-        # Cleanup if created but failed later (optional, but good practice)
-        # For now, just report error
-        raise HTTPException(status_code=500, detail=str(e))
+@app.on_event("startup")
+async def startup_event():
+    logger.info("Starting up ProjectWatcher...")
+    project_manager.start_watcher()
 
-@app.post("/api/projects/upload")
-async def upload_project_file(
-    project_path: str = Form(...),
-    file: UploadFile = File(...)
-):
+@app.on_event("shutdown")
+async def shutdown_event():
+    logger.info("Shutting down ProjectWatcher...")
+    project_manager.stop_watcher()
+
+# --- API Endpoints ---
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await project_manager.connection_manager.connect(websocket)
     try:
-        if not project_path:
-            raise HTTPException(status_code=400, detail="Project path required")
-            
-        path = Path(project_path)
-        if not path.exists() or not path.is_dir():
-            raise HTTPException(status_code=400, detail="Invalid project path")
-            
-        # Save file (overwrite enabled)
-        file_path = path / file.filename
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-            
-        return {"status": "success", "message": f"File '{file.filename}' uploaded successfully"}
+        # Send initial state
+        state = await project_manager.get_current_state()
+        await websocket.send_json(state)
         
+        while True:
+            await websocket.receive_text() # Keep connection alive
+    except WebSocketDisconnect:
+        project_manager.connection_manager.disconnect(websocket)
     except Exception as e:
-        logger.error(f"Error uploading file: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"WebSocket error: {e}")
+        project_manager.connection_manager.disconnect(websocket)
+
+@app.get("/api/config")
+async def get_config():
+    return {"discovery_root": project_manager.discovery_root}
+
+@app.get("/api/roots")
+async def get_roots():
+    return {"roots": list(project_manager.watched_roots)}
+
+@app.post("/api/roots")
+async def add_root(request: RootPathRequest):
+    try:
+        project_manager.add_root(request.path)
+        return {"status": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.delete("/api/roots")
+async def remove_root(path: str, delete_files: bool = False):
+    try:
+        abs_path = os.path.abspath(path)
+        project_manager.remove_root(abs_path)
+        
+        if delete_files and os.path.exists(abs_path):
+            logger.info(f"Deleting project files: {abs_path}")
+            shutil.rmtree(abs_path)
+            
+        return {"status": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 @app.get("/api/projects/readme")
 async def get_project_readme(path: str):
@@ -308,116 +326,94 @@ async def get_project_readme(path: str):
 
 class CommandRequest(BaseModel):
     path: str
-    cmd: str # 'open' or 'dev'
+    action: str 
 
-@app.post("/api/projects/command")
-async def run_project_command(request: CommandRequest):
+@app.post("/api/projects/action")
+async def run_project_action(request: CommandRequest):
     try:
         path = Path(request.path)
         if not path.exists() or not path.is_dir():
             raise HTTPException(status_code=400, detail="Invalid project path")
             
-        if request.cmd == "open":
+        if request.action.startswith("antigravity"):
             # Windows: start Antigravity explicitly
             logger.info(f"Opening Antigravity in {path}")
             os.system(f'cd /d "{path}" && antigravity .')
             return {"status": "success", "message": "Antigravity opened"}
             
-        elif request.cmd == "dev":
+        elif request.action == "start.bat":
             # Windows: start dev in a NEW terminal window
             logger.info(f"Command execution request for: {path}")
             
-            # 確保使用絕對路徑進行檢查
-            bat_path = path / "start.bat"
-            if bat_path.exists():
-                logger.info(f"Detected {bat_path}, executing batch script...")
-                dev_cmd = "start.bat"
-            else:
-                logger.info(f"No start.bat found at {bat_path}, falling back to npm...")
-                dev_cmd = "npm run dev"
-                
-            # 使用 start cmd /k 執行
-            os.system(f'start cmd /k "cd /d \u0022{path}\u0022 && {dev_cmd}"')
-            return {"status": "success", "message": f"Started with {dev_cmd}"}
+            # 獲取配置並轉換為環境變數 (v8.0)
+            config_path = path / "config.md"
+            env_vars = ConfigParser.get_env_vars(str(config_path)) if config_path.exists() else {}
+            
+            # 構建 SET 指令字串
+            env_set_cmds = " && ".join([f"SET {k}={v}" for k, v in env_vars.items()])
+            env_prefix = f"{env_set_cmds} && " if env_set_cmds else ""
+            
+            # 使用 start cmd /k 執行，並注入環境變數
+            full_shell_cmd = f'start cmd /k "cd /d \u0022{path}\u0022 && {env_prefix}start.bat"'
+            os.system(full_shell_cmd)
+            return {"status": "success", "message": f"Started with start.bat (Envs injected: {len(env_vars)})"}
             
         else:
-            raise HTTPException(status_code=400, detail="Unknown command")
+            raise HTTPException(status_code=400, detail="Unknown action")
             
     except Exception as e:
-        logger.error(f"Error running command: {e}")
+        logger.error(f"Error running action: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.on_event("startup")
-async def startup_event():
-    project_manager.start_watcher()
-    if args and args.root:
-        try:
-            project_manager.add_root(args.root)
-        except Exception as e:
-            logger.error(f"Failed to add initial root: {e}")
-
-@app.on_event("shutdown")
-def shutdown_event():
-    project_manager.stop_watcher()
-
-# --- API Endpoints ---
-
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    await project_manager.connection_manager.connect(websocket)
+@app.post("/api/projects/upload")
+async def upload_project_files(path: str = Form(...), files: List[UploadFile] = File(...)):
     try:
-        await websocket.send_json(project_manager.get_current_state())
-        while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
-        project_manager.connection_manager.disconnect(websocket)
-
-@app.post("/api/roots")
-async def add_root_path(request: RootPathRequest):
-    try:
-        project_manager.add_root(request.path)
-        return {"status": "success", "watched_roots": list(project_manager.watched_roots)}
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="Directory not found")
-    except Exception as e:
-        logger.error(f"Error adding root: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.delete("/api/roots")
-async def remove_root_path(path: str, delete_files: bool = False):
-    try:
-        abs_path = os.path.abspath(path)
-        # Perform logical removal first
-        project_manager.remove_root(path)
+        target_path = Path(path)
+        if not target_path.exists() or not target_path.is_dir():
+            raise HTTPException(status_code=400, detail="Invalid project path")
+            
+        for file in files:
+            file_path = target_path / file.filename
+            with open(file_path, "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
         
-        # Optionally perform physical removal
-        if delete_files:
-            if os.path.exists(abs_path):
-                logger.warning(f"Physically deleting directory: {abs_path}")
-                shutil.rmtree(abs_path)
-            else:
-                logger.error(f"Cannot delete non-existent path: {abs_path}")
-                
-        return {"status": "success", "deleted_files": delete_files}
-    except ValueError:
-         raise HTTPException(status_code=404, detail="Path not found in watchlist")
+        # Trigger re-scan
+        asyncio.create_task(project_manager.notify_clients())
+        return {"status": "success", "message": f"Uploaded {len(files)} files"}
     except Exception as e:
-        logger.error(f"Error removing root: {e}")
+        logger.error(f"Error uploading files: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/config")
-async def get_config():
-    return {
-        "discovery_root": project_manager.discovery_root,
-        "watched_roots": list(project_manager.watched_roots)
-    }
+@app.post("/api/projects/create")
+async def create_project(path: str = Form(...), name: str = Form(...), task_file: UploadFile = File(None)):
+    try:
+        parent_path = Path(path)
+        if not parent_path.exists() or not parent_path.is_dir():
+            raise HTTPException(status_code=400, detail="Invalid parent path")
+            
+        project_dir = parent_path / name
+        os.makedirs(project_dir, exist_ok=True)
+        
+        # Create or upload task.md
+        task_path = project_dir / "task.md"
+        if task_file:
+            with open(task_path, "wb") as buffer:
+                shutil.copyfileobj(task_file.file, buffer)
+        else:
+            # Generate template if not provided
+            with open(task_path, "w", encoding="utf-8") as f:
+                f.write(f"# {name} 開發任務清單\n\n## v1.0 - 初始化 (進行中)\n- [ ] 專案初始化\n")
+        
+        # Auto-track the new project
+        project_manager.add_root(str(project_dir))
+        
+        return {"status": "success", "path": str(project_dir)}
+    except Exception as e:
+        logger.error(f"Error creating project: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/discover")
 async def discover_projects(request: RootPathRequest):
-    """
-    Scans a directory (shallowly) for potential projects.
-    Returns a list of found projects but does NOT add them to the watcher.
-    """
     try:
         path = os.path.abspath(request.path)
         if not os.path.exists(path):
@@ -438,18 +434,11 @@ if __name__ == "__main__":
     
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", help="Initial root directory to scan")
+    parser.add_argument("--port", type=int, default=8000, help="Port to run the server on")
     parsed_args, _ = parser.parse_known_args()
     args = parsed_args
     
-    # If running directly, we might need to patch uvicorn run to use this 'app' instance
-    # keeping global args accessible.
-    
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=args.port)
 else:
     # Uvicorn worker mode
-    # We need a way to pass args if run via command line, usually via ENV
-    # For now, default args to None
-    args = None
-    # If we want to support --root via uvicorn command line args, it's tricky.
-    # We'll assume the API is the primary way to add roots dynamically, 
-    # or rely on hardcoded default for dev.
+    pass

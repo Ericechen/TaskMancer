@@ -30,7 +30,7 @@ const completedProjects = computed(() => store.projects.filter(p => p.stats.perc
               </div>
               
               <div v-if="activeProjects.length === 0" class="py-12 border border-dashed border-border rounded-xl flex flex-col items-center justify-center text-secondary">
-                  <p class="font-mono text-sm opacity-50">No active projects. Start something!</p>
+                  <p class="font-mono text-sm opacity-75">No active projects. Start something!</p>
               </div>
               <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   <ProjectCard v-for="p in activeProjects" :key="p.path" :project="p" />

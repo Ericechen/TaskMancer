@@ -54,32 +54,54 @@ h1, h2, h3, h4, h5, h6 {
 /* Custom Markdown Content Rendering */
 .tm-readme-content {
   @apply prose prose-invert prose-sm max-w-none;
+  font-family: var(--font-sans);
 }
 
 .tm-readme-content h1, 
 .tm-readme-content h2, 
 .tm-readme-content h3 {
-  @apply text-primary font-display border-b border-white/5 pb-2 mb-4;
+  @apply text-primary font-display border-b border-white/5 pb-2 mb-4 mt-8;
+  letter-spacing: -0.02em;
+}
+
+.tm-readme-content h1 { @apply text-2xl font-bold; }
+.tm-readme-content h2 { @apply text-xl font-semibold text-accent; }
+.tm-readme-content h3 { @apply text-lg font-medium text-primary/90; }
+
+.tm-readme-content p {
+  @apply text-secondary leading-relaxed mb-4;
 }
 
 .tm-readme-content code {
-  @apply bg-white/5 text-accent px-1.5 py-0.5 rounded font-mono text-xs before:content-none after:content-none;
+  @apply bg-white/5 text-accent px-1.5 py-0.5 rounded font-mono text-[13px] before:content-none after:content-none border border-white/5;
 }
 
 .tm-readme-content pre {
-  @apply bg-black/40 border border-white/5 p-4 rounded-xl font-mono text-xs overflow-x-auto;
+  @apply bg-black/40 border border-white/5 p-5 rounded-xl font-mono text-[13px] overflow-x-auto my-6 shadow-inner;
+}
+
+.tm-readme-content pre code {
+  @apply bg-transparent border-none p-0 text-primary/90;
 }
 
 .tm-readme-content a {
-  @apply text-accent no-underline hover:underline;
+  @apply text-accent no-underline hover:underline transition-all;
 }
 
 .tm-readme-content blockquote {
-  @apply border-l-2 border-accent/50 bg-accent/5 py-1 px-4 text-secondary italic rounded-r;
+  @apply border-l-4 border-accent/30 bg-accent/5 py-4 px-6 text-secondary italic rounded-r-lg my-6;
+}
+
+.tm-readme-content ul, .tm-readme-content ol {
+  @apply mb-6 pl-5 space-y-2;
 }
 
 .tm-readme-content ul > li::marker {
-  @apply text-accent;
+  @apply text-accent/60;
+}
+
+.tm-readme-content ol > li::marker {
+  @apply text-accent/60 font-mono font-bold;
 }
 
 /* SweetAlert2 Close Button Nudge */
