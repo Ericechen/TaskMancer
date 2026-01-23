@@ -168,9 +168,20 @@ class ProjectManager:
                 path_obj = Path(meta['path'])
                 parsed = parser.parse_file(meta['task_file'])
                 
-                # Check for files (case-insensitive where possible)
-                has_start_bat = any(f.lower() == 'start.bat' for f in os.listdir(path_obj))
-                has_readme = any(f.lower() == 'readme.md' for f in os.listdir(path_obj))
+                # Check for files (case-insensitive)
+                try:
+                    all_files = os.listdir(path_obj)
+                    files_lower = [f.lower() for f in all_files]
+                    
+                    has_start_bat = 'start.bat' in files_lower
+                    # Support readme.md, readme.markdown, readme.txt, or just readme
+                    has_readme = any(f.startswith('readme') for f in files_lower)
+                    
+                    logger.info(f"Scan {meta['name']}: bat={has_start_bat}, readme={has_readme} (Files: {len(all_files)})")
+                except Exception as e:
+                    logger.error(f"Error listing files in {path_obj}: {e}")
+                    has_start_bat = False
+                    has_readme = False
 
                 all_projects_data.append({
                     "name": meta['name'],

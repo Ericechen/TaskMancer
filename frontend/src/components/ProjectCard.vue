@@ -124,11 +124,29 @@ async function handleInfo() {
         const html = await marked(content)
         
         $swal.fire({
-            title: `<span class="text-accent">${props.project.name}</span> README`,
-            html: `<div class="text-left prose prose-invert max-h-[60vh] overflow-y-auto text-sm custom-scrollbar pr-2">${html}</div>`,
-            width: '800px',
-            confirmButtonText: 'Close',
-            confirmButtonColor: '#8b5cf6',
+            title: `
+                <div class="flex flex-col items-center">
+                    <span class="text-accent text-xl font-display font-bold">${props.project.name}</span>
+                    <span class="text-[10px] text-secondary font-mono opacity-50 mt-1">${props.project.path}</span>
+                </div>
+            `,
+            html: `
+                <div class="tm-readme-content text-left max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+                    ${html}
+                </div>
+            `,
+            width: '850px',
+            background: '#121212',
+            color: '#F8FAFC',
+            confirmButtonText: 'Done Reading',
+            confirmButtonColor: '#8B5CF6',
+            customClass: {
+                popup: 'rounded-2xl border border-white/5 shadow-2xl backdrop-blur-xl',
+                confirmButton: 'px-8 py-2 rounded-lg font-bold tracking-tight'
+            },
+            showClass: {
+                popup: 'animate-fade-in-up'
+            }
         })
     } catch (e: any) {
         $swal.fire({
