@@ -61,6 +61,11 @@ export interface Project {
   health?: ProjectHealth;
   metrics?: CodebaseMetrics;
   live?: LiveStatus;
+  process?: {
+    is_running: boolean;
+    stats?: { cpu: number; ram: number } | null;
+    has_error: boolean;
+  };
   isExpanded?: boolean;
 }
 
@@ -102,6 +107,42 @@ export const useProjectStore = defineStore('project', () => {
         }
       } else if (data.type === 'log_status') {
           console.log(`Process for ${data.project} ${data.status}`)
+          const index = projects.value.findIndex(p => p.path === data.path)
+          if (index !== -1) {
+            const project = { ...projects.value[index] } as any
+            if (!project.process) {
+                project.process = { is_running: false, stats: null, has_error: false }
+            }
+            project.process.is_running = data.status === 'started' || data.status === 'running'
+            if (data.status === 'stopped') {
+                project.process.is_running = false
+                project.process.stats = null
+            }
+            projects.value[index] = project as any
+          }
+      } else if (data.type === 'process_stats') {
+        const index = projects.value.findIndex(p => p.path === data.path)
+        if (index !== -1) {
+          const project = { ...projects.value[index] } as any
+          if (!project.process) {
+              project.process = { is_running: true, stats: data.stats, has_error: false }
+          } else {
+              project.process.stats = data.stats
+              project.process.is_running = true
+          }
+          projects.value[index] = project as any
+        }
+      } else if (data.type === 'process_error') {
+        const index = projects.value.findIndex(p => p.path === data.path)
+        if (index !== -1) {
+          const project = { ...projects.value[index] } as any
+          if (!project.process) {
+              project.process = { is_running: true, stats: null, has_error: data.has_error }
+          } else {
+              project.process.has_error = data.has_error
+          }
+          projects.value[index] = project as any
+        }
       }
     }
 
@@ -150,6 +191,19 @@ export const useProjectStore = defineStore('project', () => {
     // Clear logs when starting a new session
     if (action === 'start.bat') {
         projectLogs.value[path] = []
+    }
+
+    // [v10.4] Optimistic UI Update: immediately mark as not running if stopping
+    if (action === 'stop') {
+        const index = projects.value.findIndex(p => p.path === path)
+        if (index !== -1) {
+            const project = { ...projects.value[index] }
+            if (project.process) {
+                project.process.is_running = false
+                project.process.stats = null
+                projects.value[index] = project as any
+            }
+        }
     }
     
     const response = await fetch('http://127.0.0.1:8000/api/projects/action', {

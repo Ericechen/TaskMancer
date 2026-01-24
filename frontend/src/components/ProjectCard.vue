@@ -83,13 +83,31 @@ async function handleDelete(path: string) {
 
 async function handleAction(action: string, path: string) {
   try {
-    if (action === 'start.bat') {
-        showConsole.value = true
-    }
     await projectStore.executeAction(action, path)
   } catch (e: any) {
     Swal.fire('Action Failed', e.message, 'error')
   }
+}
+
+async function toggleDev() {
+    const isRunning = props.project.process?.is_running;
+    if (isRunning) {
+        // Handle stopping with confirmation
+        const result = await Swal.fire({
+            title: 'Stop Service?',
+            html: `Are you sure you want to terminate <b class="text-accent">${props.project.name}</b>?`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Yes, Stop',
+            cancelButtonText: 'Cancel'
+        })
+        if (result.isConfirmed) {
+            handleAction('stop', props.project.path)
+        }
+    } else {
+        // Start silently (v10.5)
+        handleAction('start.bat', props.project.path)
+    }
 }
 
 async function handleFileChange(event: Event, path: string) {
@@ -168,12 +186,6 @@ async function handleInfo(path: string) {
     }
 }
 
-/*
-function formatNumber(num?: number): string {
-    if (num === undefined) return '0'
-    return new Intl.NumberFormat().format(num)
-}
-*/
 
 function formatSize(bytes?: number): string {
     if (bytes === undefined) return '0 B'
@@ -232,6 +244,12 @@ function formatSize(bytes?: number): string {
           <div class="flex items-center space-x-2">
               <div :class="['w-1.5 h-1.5 rounded-full flex-shrink-0', project.stats.percentage === 100 ? 'bg-success' : 'bg-accent']"></div>
               <h3 class="text-lg font-display font-medium text-primary tracking-tight truncate">{{ project.name }}</h3>
+              
+              <!-- Process Badge (v10.4) -->
+              <div v-if="project.process?.is_running" class="flex items-center space-x-2 bg-accent/10 border border-accent/20 px-2 py-0.5 rounded-full ml-1">
+                  <span :class="['w-1.5 h-1.5 rounded-full animate-pulse', project.process.has_error ? 'bg-danger' : 'bg-success']"></span>
+                  <span class="text-[9px] font-bold text-accent uppercase tracking-tighter">Running</span>
+              </div>
           </div>
           <p class="text-[10px] text-secondary font-mono truncate opacity-80 pl-3.5" :title="project.path">
               {{ project.path }}
@@ -305,13 +323,20 @@ function formatSize(bytes?: number): string {
         >
           Antigravity
         </button>
-        <button 
-          v-if="project.hasStartBat"
-          @click="handleAction('start.bat', project.path)"
-          class="flex items-center px-4 py-1.5 rounded-lg bg-surface/50 border border-white/5 text-primary/80 text-xs font-bold hover:bg-white/5 hover:text-primary transition-all shadow-sm"
-        >
-          Dev
-        </button>
+        <!-- Dev Switch (v10.5) -->
+        <div v-if="project.hasStartBat" class="flex items-center space-x-3 px-3 py-1.5 rounded-lg bg-surface/50 border border-white/5 shadow-sm">
+            <span class="text-[9px] font-black uppercase tracking-widest text-secondary/60">Dev</span>
+            <button 
+                @click="toggleDev"
+                class="relative inline-flex h-4 w-8 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
+                :class="project.process?.is_running ? 'bg-success/50' : 'bg-white/10'"
+            >
+                <span 
+                    class="pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
+                    :class="project.process?.is_running ? 'translate-x-4' : 'translate-x-0'"
+                />
+            </button>
+        </div>
         <button 
           v-if="project.hasReadme"
           @click="handleInfo(project.path)"

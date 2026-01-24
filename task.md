@@ -183,8 +183,14 @@
 - [x] 移除實時 LOC (Lines of Code) 計算，大幅減少專案載入時的檔案 I/O 壓力。
 
 ## v10.3.0 - Intelligence & Monitoring (已完成)
-- [x] **實時日誌串流 (Service Log Streaming)**：支援 `start.bat` 執行過程的 stdout/stderr 實時回傳至 Web 端輸出盤。
-- [x] **Metrics 增量更新與快取**：實作 Metrics 快取，僅在偵測到結構性變更（檔案建立/刪除）時才重新計算 Size 與 FileCount。
-- [x] **全域搜尋與過濾**：在 UI 加入搜尋功能，支援按名稱或路徑搜尋專案。
+- [x] **實時日誌串流**：支援 `start.bat` 實時回傳。
+- [x] **Metrics 快取**：最佳化掃描效能。
+
+## v10.4.0 - Intelligence Orchestrator (已完成)
+- [x] **ANSI 終端顏色**：Console 完全支援 ANSI 色彩代碼，呈現真實開發體驗。
+- [x] **進程資源監控**：即時顯示 Node/Python 進程的 CPU 與 RAM 使用率。
+- [x] **自動報錯偵測**：監控日誌關鍵字（Error/Failed），異常時自動紅燈警示。
+- [x] **進程管理儀表板**：全域監控所有運行中的後台服務。
+- [x] **日誌進階控制**：支援自動捲動鎖定與日誌快照匯出（.log）。
 
 [Link]: https://github.com/Ericechen/TaskMancer

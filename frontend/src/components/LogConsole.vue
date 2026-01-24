@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, onUpdated } from 'vue'
+import { ref, watch, nextTick, computed } from 'vue'
 import { useProjectStore } from '../stores/projectStore'
+import AnsiUp from 'ansi-to-html'
 
 const props = defineProps<{
     projectPath: string;
@@ -11,6 +12,13 @@ const props = defineProps<{
 const emit = defineEmits(['close'])
 const store = useProjectStore()
 const scrollContainer = ref<HTMLElement | null>(null)
+const autoScroll = ref(true)
+const ansi = new AnsiUp({
+    fg: '#F8FAFC',
+    bg: 'transparent',
+    newline: false,
+    escapeXML: true,
+})
 
 function close() {
     emit('close')
@@ -24,11 +32,50 @@ async function stopProcess() {
     }
 }
 
-// Auto scroll to bottom
-onUpdated(() => {
-    if (scrollContainer.value) {
-        scrollContainer.value.scrollTop = scrollContainer.value.scrollHeight
+function exportLogs() {
+    const logs = store.projectLogs[props.projectPath] || []
+    const blob = new Blob([logs.join('\n')], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `log-${props.projectName}-${new Date().toISOString().slice(0, 19).replace(/[:]/g, '-')}.log`
+    a.click()
+    URL.revokeObjectURL(url)
+}
+
+function parseAnsi(text: string) {
+    return ansi.toHtml(text)
+}
+
+// Robust auto-scroll watcher
+watch(
+    () => store.projectLogs[props.projectPath]?.length,
+    () => {
+        if (autoScroll.value && scrollContainer.value) {
+            nextTick(() => {
+                if (scrollContainer.value) {
+                    scrollContainer.value.scrollTop = scrollContainer.value.scrollHeight;
+                }
+            })
+        }
+    },
+    { flush: 'post' }
+)
+
+// Initial scroll when opening
+watch(() => props.isOpen, (open) => {
+    if (open) {
+        nextTick(() => {
+            if (scrollContainer.value) {
+                scrollContainer.value.scrollTop = scrollContainer.value.scrollHeight;
+            }
+        })
     }
+})
+
+const stats = computed(() => {
+    const p = store.projects.find(p => p.path === props.projectPath)
+    return p?.process?.stats || null
 })
 </script>
 
@@ -50,11 +97,31 @@ onUpdated(() => {
                         </div>
                         <div>
                             <h3 class="text-xl font-display font-bold text-primary">{{ projectName }}</h3>
-                            <p class="text-[10px] text-secondary font-mono uppercase tracking-[0.2em] mt-0.5">Managed Service Logs</p>
+                            <div class="flex items-center space-x-3 mt-0.5">
+                                <p class="text-[10px] text-secondary font-mono uppercase tracking-[0.2em]">Managed Service Logs</p>
+                                <div v-if="stats" class="h-3 w-px bg-white/10"></div>
+                                <div v-if="stats" class="flex items-center space-x-3 font-mono text-[9px] text-accent/80">
+                                    <span>CPU: {{ stats.cpu }}%</span>
+                                    <span>RAM: {{ stats.ram }}MB</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     
                     <div class="flex items-center space-x-3">
+                        <button 
+                            @click="exportLogs"
+                            class="p-2 text-secondary hover:text-primary transition-colors bg-white/5 rounded-lg flex items-center space-x-2 px-3"
+                            title="Download Log Snapshot"
+                        >
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0L8 8m4-4v12" />
+                            </svg>
+                            <span class="text-[10px] font-bold uppercase tracking-wider">Export</span>
+                        </button>
+                        
+                        <div class="h-6 w-px bg-white/10 mx-1"></div>
+
                         <button 
                             @click="stopProcess"
                             class="px-5 py-2 rounded-xl bg-danger/10 border border-danger/20 text-danger text-xs font-bold hover:bg-danger hover:text-white transition-all flex items-center space-x-2"
@@ -77,6 +144,7 @@ onUpdated(() => {
                 <div 
                     ref="scrollContainer"
                     class="flex-1 overflow-y-auto p-8 font-mono text-[13px] leading-relaxed custom-scrollbar bg-white/[0.01]"
+                    style="overflow-anchor: none;"
                 >
                     <div v-if="!store.projectLogs[projectPath] || store.projectLogs[projectPath].length === 0" class="h-full flex flex-col items-center justify-center text-zinc-600">
                         <svg class="w-12 h-12 mb-4 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -87,18 +155,37 @@ onUpdated(() => {
                     <div v-else class="space-y-1">
                         <div v-for="(line, idx) in store.projectLogs[projectPath]" :key="idx" class="group flex">
                             <span class="text-zinc-600 mr-4 select-none w-8 text-right font-bold">{{ idx + 1 }}</span>
-                            <span class="text-zinc-200 break-all whitespace-pre-wrap">{{ line }}</span>
+                            <span class="text-zinc-200 break-all whitespace-pre-wrap" v-html="parseAnsi(line)"></span>
                         </div>
                     </div>
                 </div>
 
                 <!-- Footer Stats -->
                 <div class="px-8 py-3 bg-white/[0.03] border-t border-white/10 flex items-center justify-between text-[10px] font-mono text-secondary">
-                    <div class="flex items-center space-x-5">
-                        <span class="flex items-center text-success"><span class="w-2 h-2 rounded-full bg-success mr-2"></span>STDOUT LIVE</span>
+                    <div class="flex items-center space-x-6">
+                        <span class="flex items-center text-success">
+                            <span class="w-2 h-2 rounded-full bg-success mr-2 animate-pulse"></span>
+                            STDOUT LIVE
+                        </span>
+                        
+                        <button 
+                            @click="autoScroll = !autoScroll"
+                            class="flex items-center space-x-2 hover:text-primary transition-colors"
+                            :class="autoScroll ? 'text-accent' : 'text-secondary/50'"
+                        >
+                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 13l-7 7-7-7m14-8l-7 7-7-7" />
+                            </svg>
+                            <span class="tracking-widest uppercase">{{ autoScroll ? 'Auto-scroll On' : 'Auto-scroll Off' }}</span>
+                        </button>
+
                         <span class="opacity-50 tracking-widest">BUFFER: {{ store.projectLogs[projectPath]?.length || 0 }}/500 lines</span>
                     </div>
-                    <div class="uppercase tracking-[0.2em] opacity-30">Stream Protocol v2 (WebSocket)</div>
+
+                    <div class="flex items-center space-x-6 uppercase tracking-[0.2em] opacity-30">
+                        <span>ANSI Enabled</span>
+                        <span>v10.4 Protocol</span>
+                    </div>
                 </div>
             </div>
         </div>

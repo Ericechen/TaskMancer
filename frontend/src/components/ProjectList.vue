@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useProjectStore } from '../stores/projectStore'
 import ProjectCard from './ProjectCard.vue'
+import ProcessDashboard from './ProcessDashboard.vue'
 
 const store = useProjectStore()
 
@@ -42,6 +43,8 @@ const completedProjects = computed(() => filteredProjects.value.filter(p => p.st
       </div>
 
       <div v-else class="space-y-16 animate-fade-in-up">
+          <!-- Multi-process Dashboard (v10.4) -->
+          <ProcessDashboard />
           
           <!-- Section 1: In Progress -->
           <section>

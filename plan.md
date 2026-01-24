@@ -44,5 +44,9 @@
 - [x] 最佳化掃描效能，移除耗時的 LOC 讀取邏輯。
 
 ## v10.3 - Intelligence Hub (已完成)
-- [x] 實作 Web Console 支援日誌串流。
-- [x] 實作 Metrics 快取與搜尋過濾功能。
+- [x] 實作 Web Console 與 Metrics 快取。
+
+## v10.4 - Intelligence Orchestrator (已完成)
+- [x] ANSI 顏色解析與日誌管理。
+- [x] 進程資源監控 (CPU/RAM) 與異常監控。
+- [x] 全域進程儀表板。

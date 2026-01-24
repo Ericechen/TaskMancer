@@ -4,6 +4,7 @@ import logging
 import os
 import shutil
 import json
+import psutil
 from pathlib import Path
 from typing import List, Dict, Any, Set
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, File, UploadFile, Form
@@ -46,6 +47,8 @@ class RunningProcess:
         self.process = None
         self.connection_manager = connection_manager
         self.is_running = False
+        self.stats = {"cpu": 0, "ram": 0}
+        self.has_error = False
 
     async def start(self, cmd: str, env: dict):
         try:
@@ -60,31 +63,75 @@ class RunningProcess:
             )
             self.is_running = True
             asyncio.create_task(self.read_logs())
-            logger.info(f"Started managed process for {self.name}")
+            asyncio.create_task(self.monitor_resources())
+            logger.info(f"Started managed process for {self.name} (PID: {self.process.pid})")
         except Exception as e:
             logger.error(f"Failed to start process for {self.name}: {e}")
 
+    async def monitor_resources(self):
+        try:
+            p = psutil.Process(self.process.pid)
+            while self.is_running:
+                try:
+                    cpu_percent = 0
+                    memory_bytes = 0
+                    
+                    children = p.children(recursive=True)
+                    for child in [p] + children:
+                        try:
+                            # interval=None means non-blocking, uses time since last call
+                            cpu_percent += child.cpu_percent(interval=None)
+                            memory_bytes += child.memory_info().rss
+                        except (psutil.NoSuchProcess, psutil.AccessDenied):
+                            continue
+                            
+                    self.stats = {
+                        "cpu": round(cpu_percent, 1),
+                        "ram": round(memory_bytes / (1024 * 1024), 1) # MB
+                    }
+                    
+                    await self.connection_manager.broadcast({
+                        "type": "process_stats",
+                        "path": self.project_path,
+                        "stats": self.stats
+                    })
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    break
+                await asyncio.sleep(3)
+        except Exception as e:
+            logger.error(f"Resource monitoring failed for {self.name}: {e}")
+
     async def read_logs(self):
-        logger.info(f"Log reader started for {self.name}")
+        logger.info(f"Log reader started for {self.name} (PID: {self.process.pid})")
+        error_keywords = ['error', 'failed', 'exception', 'critical', 'err:', 'fatal']
+        
         while self.is_running:
             try:
-                # Use read() instead of readline() to catch partial lines and handle unusual buffering
-                chunk = await self.process.stdout.read(4096)
-                if not chunk:
-                    logger.info(f"Log stream ended for {self.name}")
+                line = await self.process.stdout.readline()
+                if not line:
+                    logger.info(f"Log stream reached EOF for {self.name}")
                     break
                 
-                text = chunk.decode('utf-8', errors='ignore')
-                lines = text.splitlines()
-                
-                for line in lines:
-                    if line.strip():
-                        await self.connection_manager.broadcast({
-                            "type": "log",
-                            "project": self.name,
-                            "path": self.project_path,
-                            "content": line
-                        })
+                text = line.decode('utf-8', errors='ignore').rstrip()
+                if text:
+                    # Error detection (v10.4)
+                    lower_text = text.lower()
+                    if any(kw in lower_text for kw in error_keywords):
+                        if not self.has_error:
+                            self.has_error = True
+                            await self.connection_manager.broadcast({
+                                "type": "process_error",
+                                "path": self.project_path,
+                                "has_error": True
+                            })
+
+                    logger.info(f"[{self.name}] {text}")
+                    await self.connection_manager.broadcast({
+                        "type": "log",
+                        "project": self.name,
+                        "path": self.project_path,
+                        "content": text
+                    })
             except Exception as e:
                 logger.error(f"Error reading logs for {self.name}: {e}")
                 break
@@ -141,7 +188,12 @@ class ProjectManager:
         self.watches = {} # Map path -> ObservedWatch
         self.metrics_cache = {} # path -> metrics_data
         self.dirty_metrics = set() # paths that need metrics re-scan
-        self.active_processes: Dict[str, RunningProcess] = {} # path -> RunningProcess
+        self.active_processes: Dict[str, RunningProcess] = {} # normalized path -> RunningProcess
+
+    def _normalize_path(self, path: str) -> str:
+        """Normalize path for Windows consistency."""
+        if not path: return ""
+        return os.path.abspath(path).lower().replace("\\", "/")
 
     def start_watcher(self):
         self.event_handler = DebouncedEventHandler(
@@ -269,19 +321,20 @@ class ProjectManager:
                     git_momentum = git_helper.get_momentum_score()
                     
                     # Metrics Caching (v10.3)
+                    norm_path = self._normalize_path(project_path)
                     should_refresh_metrics = (
-                        project_path not in self.metrics_cache or 
-                        (force_metrics_paths and project_path in force_metrics_paths) or
-                        project_path in self.dirty_metrics
+                        norm_path not in self.metrics_cache or 
+                        (force_metrics_paths and norm_path in force_metrics_paths) or
+                        norm_path in self.dirty_metrics
                     )
 
                     if should_refresh_metrics:
                         health_report = get_project_health_report(project_path)
-                        self.metrics_cache[project_path] = health_report
-                        if project_path in self.dirty_metrics:
-                            self.dirty_metrics.remove(project_path)
+                        self.metrics_cache[norm_path] = health_report
+                        if norm_path in self.dirty_metrics:
+                            self.dirty_metrics.remove(norm_path)
                     else:
-                        health_report = self.metrics_cache[project_path]
+                        health_report = self.metrics_cache[norm_path]
                     
                     # Async Live Status with Explicit Ports (Safe Mode)
                     try:
@@ -306,7 +359,12 @@ class ProjectManager:
                         "momentum": git_momentum,
                         "health": health_report['health'],
                         "metrics": health_report['metrics'],
-                        "live": live_report
+                        "live": live_report,
+                        "process": {
+                            "is_running": norm_path in self.active_processes and self.active_processes[norm_path].is_running,
+                            "stats": self.active_processes[norm_path].stats if norm_path in self.active_processes else None,
+                            "has_error": self.active_processes[norm_path].has_error if norm_path in self.active_processes else False
+                        }
                     })
                 except Exception as e:
                     logger.error(f"Failed to process project {meta['name']}: {e}")
@@ -427,8 +485,9 @@ async def run_project_action(request: CommandRequest):
             logger.info(f"Managed start request for: {path}")
             
             # Check if already running
-            if str(path) in project_manager.active_processes:
-                proc = project_manager.active_processes[str(path)]
+            norm_path = project_manager._normalize_path(str(path))
+            if norm_path in project_manager.active_processes:
+                proc = project_manager.active_processes[norm_path]
                 if proc.is_running:
                     return {"status": "already_running", "message": "Process is already streaming logs."}
 
@@ -445,7 +504,7 @@ async def run_project_action(request: CommandRequest):
                     break
 
             proc = RunningProcess(str(path), project_name, project_manager.connection_manager)
-            project_manager.active_processes[str(path)] = proc
+            project_manager.active_processes[norm_path] = proc
             
             # Execute start.bat with explicit path and CI environment
             # Note: create_subprocess_shell on Windows already uses 'cmd /c'
@@ -456,9 +515,15 @@ async def run_project_action(request: CommandRequest):
             return {"status": "success", "message": "Process started with streaming logs"}
             
         elif request.action == "stop":
-            if str(path) in project_manager.active_processes:
-                project_manager.active_processes[str(path)].stop()
-                return {"status": "success", "message": "Process stopped"}
+            norm_path = project_manager._normalize_path(str(path))
+            if norm_path in project_manager.active_processes:
+                proc = project_manager.active_processes[norm_path]
+                proc.stop()
+                # Remove from tracking pool immediately
+                del project_manager.active_processes[norm_path]
+                # Broadcast updated state to all clients
+                asyncio.create_task(project_manager.notify_clients())
+                return {"status": "success", "message": "Process stopped and cleaned up"}
             return {"status": "not_running", "message": "No active process for this path"}
 
         else:

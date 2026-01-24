@@ -10,14 +10,19 @@ echo   [95mTaskMancer [0m - Project Intelligence
 echo  -----------------------------------
 echo.
 
-:: Step 1: Launch Backend (New Window)
-echo  [1/2] Launching Backend API in new window...
+:: Step 1: Launch Backend
+echo [1/2] Launching Backend API...
 if "%TM_PORT_BACKEND%"=="" set TM_PORT_BACKEND=8000
+
+:: v10.3: If managed (CI=true), use start /b to keep logs in current stdout
+set START_BACKEND=start "TM Backend" cmd /k
+if "%CI%"=="true" set START_BACKEND=start /b cmd /c
+
 IF EXIST ".venv\Scripts\activate.bat" (
-    start "TM Backend" cmd /k "title TM - Backend && echo Starting Python Backend on port %TM_PORT_BACKEND%... && call .venv\Scripts\activate && python backend/main.py --port %TM_PORT_BACKEND%"
+    %START_BACKEND% "title TM - Backend && call .venv\Scripts\activate && python backend/main.py --port %TM_PORT_BACKEND%"
 ) ELSE (
-    echo  [!] Virtual environment not found. Using global python...
-    start "TM Backend" cmd /k "title TM - Backend && echo Starting Python Backend on port %TM_PORT_BACKEND%... && python backend/main.py --port %TM_PORT_BACKEND%"
+    echo [!] Virtual environment not found. Using global python...
+    %START_BACKEND% "python backend/main.py --port %TM_PORT_BACKEND%"
 )
 
 :: Step 2: Launch Frontend (Current Window)
