@@ -50,3 +50,15 @@
 - [x] ANSI 顏色解析與日誌管理。
 - [x] 進程資源監控 (CPU/RAM) 與異常監控。
 - [x] 全域進程儀表板。
+
+## v10.6 - Dynamic View Switching (已完成)
+- [x] 加入水平切換三大導航模式 (List/Grid/Monitor)。
+
+## v11.0 - Intelligence & Tagging (已完成)
+- [x] 進程資源歷史數據追蹤與 SVG Sparkline 渲染。
+- [x] 全自動技術棧偵測標籤與 hashtag 過濾器。
+
+## v11.1 - Command Center UX (已完成)
+- [x] 水平分割 NOC 監控模式。
+- [x] 全域基礎設施資源狀態列。
+- [x] 監控面板自動滾動與對比度調優。

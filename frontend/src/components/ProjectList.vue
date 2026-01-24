@@ -3,33 +3,43 @@ import { computed } from 'vue'
 import { useProjectStore } from '../stores/projectStore'
 import ProjectCard from './ProjectCard.vue'
 import ProcessDashboard from './ProcessDashboard.vue'
-import AnsiUp from 'ansi-to-html'
+import MonitorTile from './MonitorTile.vue'
 
 const store = useProjectStore()
-const ansi = new AnsiUp({
-    fg: '#F8FAFC',
-    bg: 'transparent',
-    newline: false,
-    escapeXML: true,
-})
-
-function parseAnsi(text: string) {
-    return ansi.toHtml(text)
-}
 
 function getLatestLogs(path: string) {
     const logs = store.projectLogs[path] || []
     return logs.slice(-50)
 }
 
-// Filtered Projects
+const layoutMode = computed(() => store.layoutMode)
+
+// [v11.0] Multi-criteria Filtering
 const filteredProjects = computed(() => {
-    if (!store.searchQuery) return store.projects
-    const query = store.searchQuery.toLowerCase()
-    return store.projects.filter(p => 
-        p.name.toLowerCase().includes(query) || 
-        p.path.toLowerCase().includes(query)
-    )
+    let results = store.projects
+    
+    // 1. Search Query
+    if (store.searchQuery) {
+        const query = store.searchQuery.toLowerCase()
+        results = results.filter(p => 
+            p.name.toLowerCase().includes(query) || 
+            p.path.toLowerCase().includes(query)
+        )
+    }
+
+    // 2. Tag Filter
+    if (store.selectedTag) {
+        results = results.filter(p => p.tags?.includes(store.selectedTag))
+    }
+
+    return results
+})
+
+// [v11.0] Tag Aggregation
+const allTags = computed(() => {
+    const tags = new Set<string>()
+    store.projects.forEach(p => p.tags?.forEach(t => tags.add(t)))
+    return Array.from(tags).sort()
 })
 
 // Categories
@@ -37,11 +47,55 @@ const draftProjects = computed(() => filteredProjects.value.filter(p => p.stats.
 const activeProjects = computed(() => filteredProjects.value.filter(p => p.stats.percentage > 0 && p.stats.percentage < 100))
 const completedProjects = computed(() => filteredProjects.value.filter(p => p.stats.percentage === 100))
 
-const layoutMode = computed(() => store.layoutMode)
+async function handleAction(action: string, path: string) {
+    try {
+        await store.executeAction(action, path)
+    } catch (e: any) {
+        console.error(e)
+    }
+}
+
+// [v11.1] Total Resource Consumption
+const totalMonitorStats = computed(() => {
+    let cpu = 0
+    let ram = 0
+    const active = store.projects.filter(p => p.process?.is_running)
+    active.forEach(p => {
+        if (p.process?.stats) {
+            cpu += p.process.stats.cpu
+            ram += p.process.stats.ram
+        }
+    })
+    return { 
+        cpu: cpu.toFixed(1), 
+        ram: ram.toFixed(1),
+        count: active.length
+    }
+})
 </script>
 
 <template>
   <div class="space-y-16">
+      <!-- [v11.0] Tag Bar -->
+      <div v-if="allTags.length > 0" class="flex flex-wrap items-center gap-3 animate-fade-in-up">
+          <button 
+            @click="store.selectedTag = ''"
+            :class="!store.selectedTag ? 'bg-accent/20 text-accent border-accent/20 shadow-[0_0_15px_rgba(139,92,246,0.2)]' : 'bg-surface/30 border-white/5 text-secondary hover:text-primary'"
+            class="px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all"
+          >
+            All Sources
+          </button>
+          <button 
+            v-for="tag in allTags" 
+            :key="tag"
+            @click="store.selectedTag = tag"
+            :class="store.selectedTag === tag ? 'bg-accent/20 text-accent border-accent/20 shadow-[0_0_15px_rgba(139,92,246,0.2)]' : 'bg-surface/30 border-white/5 text-secondary hover:text-primary'"
+            class="px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all flex items-center"
+          >
+            <span class="opacity-40 mr-1.5 text-[8px]">#</span>{{ tag }}
+          </button>
+      </div>
+
       <!-- Empty State -->
       <div v-if="store.projects.length === 0 && store.isConnected" class="text-center py-20">
          <p class="text-lg mb-2 font-display text-primary">No projects monitored yet.</p>
@@ -112,41 +166,54 @@ const layoutMode = computed(() => store.layoutMode)
               <ProjectCard v-for="p in filteredProjects" :key="p.path" :project="p" />
           </div>
 
-          <!-- LAYOUT: Monitor Matrix (v10.6) -->
-          <div v-else-if="layoutMode === 'monitor'" class="space-y-6">
-               <div v-if="store.projects.filter((p: any) => p.process?.is_running).length === 0" class="text-center py-32 border border-dashed border-border rounded-3xl bg-white/[0.01]">
-                   <svg class="w-12 h-12 text-secondary/30 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <!-- LAYOUT: Monitor Matrix (v11.1 - Horizontal Row Mode) -->
+          <div v-else-if="layoutMode === 'monitor'" class="space-y-8 min-h-[60vh]">
+               <!-- [v11.1] Global Infrastructure Status Bar -->
+               <div v-if="totalMonitorStats.count > 0" class="flex items-center justify-between px-10 py-8 bg-white/[0.02] border border-white/5 rounded-[2.5rem] mb-12 shadow-2xl backdrop-blur-3xl ring-1 ring-white/5 animate-fade-in-up">
+                   <div class="flex items-center space-x-12">
+                       <div class="flex flex-col">
+                           <span class="text-[9px] font-black uppercase tracking-[0.4em] text-accent mb-2">Command Center</span>
+                           <h4 class="text-xs font-mono font-black text-primary/80">GLOBAL RESOURCE POOL</h4>
+                       </div>
+                       <div class="h-12 w-[1px] bg-white/10 hidden sm:block"></div>
+                       <div class="flex items-center space-x-16">
+                           <div class="flex flex-col">
+                               <span class="text-[8px] text-secondary/40 uppercase font-black mb-1.5 tracking-widest">Total CPU</span>
+                               <span class="text-4xl font-mono font-black text-primary tracking-tighter">{{ totalMonitorStats.cpu }}<span class="text-sm ml-1 opacity-30">%</span></span>
+                           </div>
+                           <div class="flex flex-col">
+                               <span class="text-[8px] text-secondary/40 uppercase font-black mb-1.5 tracking-widest">Global Memory</span>
+                               <span class="text-4xl font-mono font-black text-primary tracking-tighter">{{ totalMonitorStats.ram }}<span class="text-sm ml-1 opacity-30">MB</span></span>
+                           </div>
+                       </div>
+                   </div>
+                   <div class="hidden lg:flex flex-col items-end">
+                       <div class="flex items-center space-x-3 text-[9px] font-black uppercase tracking-[0.2em] text-accent mb-2">
+                           <span class="relative flex h-2 w-2">
+                               <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75"></span>
+                               <span class="relative inline-flex rounded-full h-2 w-2 bg-accent"></span>
+                           </span>
+                           <span>Telemetric Status: Active</span>
+                       </div>
+                       <span class="text-[8px] text-secondary/60 font-mono font-bold tracking-widest">{{ totalMonitorStats.count }} INSTANCES UNDER SURVEILLANCE</span>
+                   </div>
+               </div>
+
+               <div v-if="totalMonitorStats.count === 0" class="text-center py-32 border border-dashed border-border rounded-3xl bg-white/[0.01]">
+                   <svg class="w-12 h-12 text-secondary/60 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                    </svg>
-                   <p class="text-secondary font-mono text-sm tracking-widest">NO ACTIVE SERVICES TO MONITOR</p>
-                   <p class="text-[10px] text-secondary/50 mt-2">Start a project in Dev mode to see it in the Matrix.</p>
+                   <p class="text-secondary font-mono text-sm tracking-widest uppercase">No Active Streams Found</p>
+                   <p class="text-[10px] text-secondary/50 mt-2">Activate project "Dev" mode to begin monitoring.</p>
                </div>
-               <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                   <div 
-                        v-for="p in store.projects.filter((p: any) => p.process?.is_running)" 
+               <div v-else class="space-y-12">
+                   <MonitorTile 
+                        v-for="p in (store.projects.filter((p: any) => p.process?.is_running) as any[])" 
                         :key="p.path"
-                        class="bg-[#080808]/80 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden flex flex-col h-[400px] shadow-2xl"
-                    >
-                        <!-- Monitor Header -->
-                        <div class="px-5 py-3 border-b border-white/5 bg-white/[0.02] flex items-center justify-between">
-                            <div class="flex items-center space-x-3">
-                                <span class="w-2 h-2 rounded-full bg-success animate-pulse"></span>
-                                <h3 class="text-xs font-bold text-primary font-mono tracking-tighter">{{ p.name }}</h3>
-                            </div>
-                            <div class="flex items-center space-x-4 font-mono text-[9px] text-secondary">
-                                <span class="text-accent">{{ p.process?.stats?.cpu }}% CPU</span>
-                                <span>{{ p.process?.stats?.ram }} MB</span>
-                            </div>
-                        </div>
-                        <!-- Mini Log Stream -->
-                        <div class="flex-1 overflow-y-auto p-4 font-mono text-[10px] space-y-1 bg-black/40 custom-scrollbar">
-                            <div v-if="!getLatestLogs(p.path).length" class="text-zinc-800 italic">Awaiting logs...</div>
-                            <div v-for="(line, idx) in getLatestLogs(p.path)" :key="idx" class="flex">
-                                <span class="text-zinc-700 mr-3 opacity-50">{{ idx + 1 }}</span>
-                                <span class="text-zinc-400 break-all" v-html="parseAnsi(line)"></span>
-                            </div>
-                        </div>
-                   </div>
+                        :project="p"
+                        :logs="getLatestLogs(p.path)"
+                        @action="handleAction"
+                   />
                </div>
           </div>
 

@@ -7,6 +7,7 @@ import json
 import psutil
 from pathlib import Path
 from typing import List, Dict, Any, Set
+from collections import deque
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -49,6 +50,9 @@ class RunningProcess:
         self.is_running = False
         self.stats = {"cpu": 0, "ram": 0}
         self.has_error = False
+        # Metrics History (v11.0) - Keep last 300 samples (~5-10 mins)
+        self.cpu_history = deque(maxlen=300)
+        self.ram_history = deque(maxlen=300)
 
     async def start(self, cmd: str, env: dict):
         try:
@@ -90,10 +94,18 @@ class RunningProcess:
                         "ram": round(memory_bytes / (1024 * 1024), 1) # MB
                     }
                     
+                    # Update History
+                    self.cpu_history.append(self.stats["cpu"])
+                    self.ram_history.append(self.stats["ram"])
+                    
                     await self.connection_manager.broadcast({
                         "type": "process_stats",
                         "path": self.project_path,
-                        "stats": self.stats
+                        "stats": self.stats,
+                        "history": {
+                            "cpu": list(self.cpu_history),
+                            "ram": list(self.ram_history)
+                        }
                     })
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     break
@@ -146,11 +158,16 @@ class RunningProcess:
 
     def stop(self):
         if self.process:
-            import signal
-            if os.name == 'nt':
-                os.kill(self.process.pid, signal.CTRL_BREAK_EVENT)
-            else:
-                self.process.terminate()
+            try:
+                # Use psutil to clean up the entire process tree
+                parent = psutil.Process(self.process.pid)
+                for child in parent.children(recursive=True):
+                    child.kill()
+                parent.kill()
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass
+            except Exception as e:
+                logger.error(f"Stop process failed: {e}")
             self.is_running = False
 
 # --- Global State ---
@@ -346,9 +363,13 @@ class ProjectManager:
                         logger.error(f"Live report failed for {meta['name']}: {e}")
                         live_report = {"active_ports": [], "dependency_audit": {"status": "error"}}
 
+                    norm_path = self._normalize_path(project_path)
+                    proc = self.active_processes.get(norm_path)
+
                     root_projects.append({
                         "name": meta['name'],
                         "path": project_path,
+                        "tags": meta.get('tags', []), # [v11.0] Critical Fix
                         "stats": parsed['stats'],
                         "tasks": parsed['tasks'],
                         "links": final_links, 
@@ -361,9 +382,13 @@ class ProjectManager:
                         "metrics": health_report['metrics'],
                         "live": live_report,
                         "process": {
-                            "is_running": norm_path in self.active_processes and self.active_processes[norm_path].is_running,
-                            "stats": self.active_processes[norm_path].stats if norm_path in self.active_processes else None,
-                            "has_error": self.active_processes[norm_path].has_error if norm_path in self.active_processes else False
+                            "is_running": proc.is_running if proc else False,
+                            "stats": proc.stats if proc else None,
+                            "has_error": proc.has_error if proc else False,
+                            "history": {
+                                "cpu": list(proc.cpu_history),
+                                "ram": list(proc.ram_history)
+                            } if proc else {"cpu": [], "ram": []}
                         }
                     })
                 except Exception as e:

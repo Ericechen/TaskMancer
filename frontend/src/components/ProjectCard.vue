@@ -316,50 +316,52 @@ function formatSize(bytes?: number): string {
       </div>
 
     <!-- Quick Actions -->
-    <div class="flex flex-wrap items-center gap-2 mb-4 pl-3.5 pr-2">
-        <button 
-          @click="handleAction('antigravity .', project.path)"
-          class="flex items-center px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/20 text-accent text-[10px] font-bold hover:bg-accent hover:text-white transition-all shadow-sm shrink-0"
-        >
-          Antigravity
-        </button>
-
-        <!-- Dev Switch (v10.5) -->
-        <div v-if="project.hasStartBat" class="flex items-center space-x-2 px-2.5 py-1.5 rounded-lg bg-surface/50 border border-white/5 shadow-sm shrink-0">
-            <span class="text-[9px] font-black uppercase tracking-widest text-secondary/60">Dev</span>
+    <div class="flex items-start justify-between mb-4 pl-3.5 pr-2 gap-4">
+        <div class="flex flex-wrap items-center gap-2 min-w-0">
             <button 
-                @click="toggleDev"
-                class="relative inline-flex h-3.5 w-7 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
-                :class="project.process?.is_running ? 'bg-success/50' : 'bg-white/10'"
+              @click="handleAction('antigravity .', project.path)"
+              class="flex items-center px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/20 text-accent text-[10px] font-bold hover:bg-accent hover:text-white transition-all shadow-sm shrink-0"
             >
-                <span 
-                    class="pointer-events-none inline-block h-2.5 w-2.5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
-                    :class="project.process?.is_running ? 'translate-x-3.5' : 'translate-x-0'"
-                />
+              Antigravity
+            </button>
+
+            <!-- Dev Switch (v10.5) -->
+            <div v-if="project.hasStartBat" class="flex items-center space-x-2 px-2.5 py-1.5 rounded-lg bg-surface/50 border border-white/5 shadow-sm shrink-0">
+                <span class="text-[9px] font-black uppercase tracking-widest text-secondary/60">Dev</span>
+                <button 
+                    @click="toggleDev"
+                    class="relative inline-flex h-3.5 w-7 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
+                    :class="project.process?.is_running ? 'bg-success/50' : 'bg-white/10'"
+                >
+                    <span 
+                        class="pointer-events-none inline-block h-2.5 w-2.5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
+                        :class="project.process?.is_running ? 'translate-x-3.5' : 'translate-x-0'"
+                    />
+                </button>
+            </div>
+
+            <button 
+              v-if="project.hasReadme"
+              @click="handleInfo(project.path)"
+              class="flex items-center px-3 py-1.5 rounded-lg bg-surface/50 border border-white/5 text-secondary text-[10px] font-bold hover:bg-white/5 hover:text-primary transition-all shadow-sm shrink-0"
+            >
+              Info
+            </button>
+            
+            <button 
+              @click="showConsole = true"
+              class="flex items-center px-3 py-1.5 rounded-lg bg-surface/50 border border-white/5 text-secondary text-[10px] font-bold hover:bg-white/5 hover:text-accent transition-all shadow-sm shrink-0"
+              title="View Live Logs"
+            >
+              <svg class="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 00-2 2z" />
+              </svg>
+              Logs
             </button>
         </div>
 
-        <button 
-          v-if="project.hasReadme"
-          @click="handleInfo(project.path)"
-          class="flex items-center px-3 py-1.5 rounded-lg bg-surface/50 border border-white/5 text-secondary text-[10px] font-bold hover:bg-white/5 hover:text-primary transition-all shadow-sm shrink-0"
-        >
-          Info
-        </button>
-        
-        <button 
-          @click="showConsole = true"
-          class="flex items-center px-3 py-1.5 rounded-lg bg-surface/50 border border-white/5 text-secondary text-[10px] font-bold hover:bg-white/5 hover:text-accent transition-all shadow-sm shrink-0"
-          title="View Live Logs"
-        >
-          <svg class="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 00-2 2z" />
-          </svg>
-          Logs
-        </button>
-
-        <!-- Upload Button (Compact) -->
-        <div class="relative shrink-0 ml-auto">
+        <!-- Upload Button (Sticky Top-Right) -->
+        <div class="relative shrink-0">
             <input 
               type="file" 
               class="hidden" 
@@ -373,7 +375,7 @@ function formatSize(bytes?: number): string {
               title="Upload Task Spec"
             >
               <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a2 2 0 002-2h12a2 2 0 002-2v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
               </svg>
             </label>
         </div>

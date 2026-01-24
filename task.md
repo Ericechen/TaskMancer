@@ -193,4 +193,19 @@
 - [x] **進程管理儀表板**：全域監控所有運行中的後台服務。
 - [x] **日誌進階控制**：支援自動捲動鎖定與日誌快照匯出（.log）。
 
+## v10.6.0 - Dynamic View Switching (已完成)
+- [x] **三大導航視圖 (List/Grid/Monitor)**：支援多重佈局切換，適應不同開發場景。
+- [x] **靜默開關體系**：Dev Switch 讓背景服務啟動變得輕快、無感，日誌查看權交還給使用者。
+- [x] **UI 佈局精修**：優化卡片按鈕排列，解決 Upload 按鈕定位問題。
+
+## v11.0.0 - Intelligence Command Center (已完成)
+- [x] **進程歷史趨勢**：在記憶體中追蹤最近 300 個數據點的 CPU/RAM 歷史。
+- [x] **智慧標籤系統 (Auto-Tagging)**：自動識別技術棧 (NodeJS, Python) 並解析 `task.md` 的 `#Hashtag`。
+- [x] **效能折線圖 (Metric Snapshots)**：在 Log 視窗中以 SVG Sparklines 渲染即時效能曲線。
+
+## v11.1.0 - NOC Mode & Global Metrics (已完成)
+- [x] **Monitor Matrix 專業化**：改為水平寬屏監控台，左側 Terminal 日誌與右側 Performance 趨勢同步顯示。
+- [x] **全域基礎設施狀態列**：Monitor 視圖頂部即時顯示所有受管服務的總體資源佔用 (Global CPU/RAM)。
+- [x] **視覺對比度提升**：全站次要文字亮度調優，解決低對比度閱讀壓力。
+
 [Link]: https://github.com/Ericechen/TaskMancer

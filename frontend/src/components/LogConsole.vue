@@ -73,13 +73,32 @@ watch(() => props.isOpen, (open) => {
     }
 })
 
-const stats = computed(() => {
-    const p = store.projects.find(p => p.path === props.projectPath)
-    return p?.process?.stats || null
-})
+const project = computed(() => store.projects.find(p => p.path === props.projectPath))
+const stats = computed(() => project.value?.process?.stats || null)
+const history = computed(() => project.value?.process?.history || { cpu: [], ram: [] })
+const currentLogs = computed(() => store.projectLogs[props.projectPath] || [])
+const activeTab = ref<'logs' | 'performance'>('logs')
 
-const currentLogs = computed(() => {
-    return store.projectLogs[props.projectPath] || []
+// [v11.0] Sparkline Generator
+function generatePoints(data: number[], maxVal: number) {
+    if (!data || data.length < 2) return ""
+    const width = 800
+    const height = 180
+    const pointsCount = 300
+    const step = width / (pointsCount - 1)
+    
+    // We only take the last 300 points
+    return data.map((val, i) => {
+        const x = i * step
+        const y = height - (val / maxVal) * height
+        return `${x},${y}`
+    }).join(" ")
+}
+
+const cpuPoints = computed(() => generatePoints(history.value.cpu, 100))
+const ramPoints = computed(() => {
+    const maxVal = Math.max(...history.value.ram, 512)
+    return generatePoints(history.value.ram, maxVal)
 })
 </script>
 
@@ -113,6 +132,20 @@ const currentLogs = computed(() => {
                     </div>
                     
                     <div class="flex items-center space-x-3">
+                        <!-- [v11.0] Tab Switcher -->
+                        <div class="flex bg-void/50 p-1 rounded-xl border border-white/5 mr-2">
+                            <button 
+                                @click="activeTab = 'logs'"
+                                :class="activeTab === 'logs' ? 'bg-accent text-white shadow-lg shadow-accent/20' : 'text-secondary hover:text-primary'"
+                                class="px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all"
+                            >Logs</button>
+                            <button 
+                                @click="activeTab = 'performance'"
+                                :class="activeTab === 'performance' ? 'bg-accent text-white shadow-lg shadow-accent/20' : 'text-secondary hover:text-primary'"
+                                class="px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all"
+                            >Performance</button>
+                        </div>
+
                         <button 
                             @click="exportLogs"
                             class="p-2 text-secondary hover:text-primary transition-colors bg-white/5 rounded-lg flex items-center space-x-2 px-3"
@@ -144,23 +177,89 @@ const currentLogs = computed(() => {
                     </div>
                 </div>
 
-                <!-- Console Output -->
-                <div 
-                    ref="scrollContainer"
-                    class="flex-1 overflow-y-auto p-8 font-mono text-[13px] leading-relaxed custom-scrollbar bg-white/[0.01]"
-                    style="overflow-anchor: none;"
-                >
-                    <div v-if="currentLogs.length === 0" class="h-full flex flex-col items-center justify-center text-zinc-600">
-                        <svg class="w-12 h-12 mb-4 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                        </svg>
-                        <p class="animate-pulse italic opacity-40">Connecting to stream...</p>
-                    </div>
-                    <div v-else class="space-y-1">
-                        <div v-for="(line, idx) in currentLogs" :key="idx" class="group flex">
-                            <span class="text-zinc-600 mr-4 select-none w-8 text-right font-bold">{{ idx + 1 }}</span>
-                            <span class="text-zinc-200 break-all whitespace-pre-wrap" v-html="parseAnsi(line)"></span>
+                <!-- Content Area -->
+                <div v-if="activeTab === 'logs'" class="flex-1 flex flex-col min-h-0">
+                    <!-- Console Output -->
+                    <div 
+                        ref="scrollContainer"
+                        class="flex-1 overflow-y-auto p-8 font-mono text-[13px] leading-relaxed custom-scrollbar bg-white/[0.01]"
+                        style="overflow-anchor: none;"
+                    >
+                        <div v-if="currentLogs.length === 0" class="h-full flex flex-col items-center justify-center text-zinc-600">
+                            <svg class="w-12 h-12 mb-4 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                            <p class="animate-pulse italic opacity-40">Connecting to stream...</p>
                         </div>
+                        <div v-else class="space-y-1">
+                            <div v-for="(line, idx) in currentLogs" :key="idx" class="group flex">
+                                <span class="text-zinc-600 mr-4 select-none w-8 text-right font-bold">{{ idx + 1 }}</span>
+                                <span class="text-zinc-200 break-all whitespace-pre-wrap" v-html="parseAnsi(line)"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- [v11.0] Performance View -->
+                <div v-else class="flex-1 p-12 bg-white/[0.01] overflow-y-auto custom-scrollbar">
+                    <div class="grid grid-cols-1 gap-12 max-w-4xl mx-auto">
+                        <!-- CPU Section -->
+                        <section>
+                            <div class="flex items-center justify-between mb-4">
+                                <h4 class="text-[10px] font-black uppercase tracking-[0.2em] text-accent">CPU Usage Trend</h4>
+                                <span class="text-2xl font-mono font-bold text-primary">{{ stats?.cpu }}%</span>
+                            </div>
+                            <div class="h-48 w-full bg-void rounded-2xl border border-white/5 relative overflow-hidden flex items-center justify-center">
+                                <svg class="w-full h-full preserve-3d" viewBox="0 0 800 180" preserveAspectRatio="none">
+                                    <defs>
+                                        <linearGradient id="cpuGradient" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="0%" stop-color="#8B5CF6" stop-opacity="0.2" />
+                                            <stop offset="100%" stop-color="#8B5CF6" stop-opacity="0" />
+                                        </linearGradient>
+                                    </defs>
+                                    <path :d="`M ${cpuPoints} L 800 180 L 0 180 Z`" fill="url(#cpuGradient)" />
+                                    <polyline 
+                                        fill="none" 
+                                        stroke="#8B5CF6" 
+                                        stroke-width="2" 
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        :points="cpuPoints" 
+                                        class="drop-shadow-[0_0_8px_rgba(139,92,246,0.5)]"
+                                    />
+                                </svg>
+                                <div v-if="!history.cpu.length" class="absolute inset-0 flex items-center justify-center text-xs text-secondary/60 italic font-mono">Initializing sensors...</div>
+                            </div>
+                        </section>
+
+                        <!-- RAM Section -->
+                        <section>
+                            <div class="flex items-center justify-between mb-4">
+                                <h4 class="text-[10px] font-black uppercase tracking-[0.2em] text-success">Memory usage Trend</h4>
+                                <span class="text-2xl font-mono font-bold text-primary">{{ stats?.ram }} <span class="text-xs text-secondary">MB</span></span>
+                            </div>
+                            <div class="h-48 w-full bg-void rounded-2xl border border-white/5 relative overflow-hidden">
+                                <svg class="w-full h-full" viewBox="0 0 800 180" preserveAspectRatio="none">
+                                    <defs>
+                                        <linearGradient id="ramGradient" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="0%" stop-color="#10B981" stop-opacity="0.2" />
+                                            <stop offset="100%" stop-color="#10B981" stop-opacity="0" />
+                                        </linearGradient>
+                                    </defs>
+                                    <path :d="`M ${ramPoints} L 800 180 L 0 180 Z`" fill="url(#ramGradient)" />
+                                    <polyline 
+                                        fill="none" 
+                                        stroke="#10B981" 
+                                        stroke-width="2" 
+                                        stroke-linecap="round" 
+                                        stroke-linejoin="round"
+                                        :points="ramPoints" 
+                                        class="drop-shadow-[0_0_8px_rgba(16,185,129,0.4)]"
+                                    />
+                                </svg>
+                                <div v-if="!history.ram.length" class="absolute inset-0 flex items-center justify-center text-xs text-secondary/60 italic font-mono">Calibrating memory...</div>
+                            </div>
+                        </section>
                     </div>
                 </div>
 
@@ -183,12 +282,12 @@ const currentLogs = computed(() => {
                             <span class="tracking-widest uppercase">{{ autoScroll ? 'Auto-scroll On' : 'Auto-scroll Off' }}</span>
                         </button>
 
-                        <span class="opacity-50 tracking-widest">BUFFER: {{ currentLogs.length }}/500 lines</span>
+                        <span class="opacity-70 tracking-widest">BUFFER: {{ currentLogs.length }}/500 lines</span>
                     </div>
 
-                    <div class="flex items-center space-x-6 uppercase tracking-[0.2em] opacity-30">
+                    <div class="flex items-center space-x-6 uppercase tracking-[0.2em] opacity-60">
                         <span>ANSI Enabled</span>
-                        <span>v10.4 Protocol</span>
+                        <span>v11.1 Protocol</span>
                     </div>
                 </div>
             </div>

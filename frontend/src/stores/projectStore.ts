@@ -56,6 +56,7 @@ export interface Project {
   hasConfig: boolean;
   hasStartBat: boolean;
   hasReadme: boolean;
+  tags: string[];
   git?: GitSnapshot;
   momentum?: number;
   health?: ProjectHealth;
@@ -64,6 +65,7 @@ export interface Project {
   process?: {
     is_running: boolean;
     stats?: { cpu: number; ram: number } | null;
+    history?: { cpu: number[]; ram: number[] };
     has_error: boolean;
   };
   isExpanded?: boolean;
@@ -74,6 +76,7 @@ export const useProjectStore = defineStore('project', () => {
   const isConnected = ref(false)
   const discoveryRoot = ref('')
   const searchQuery = ref('')
+  const selectedTag = ref('')
   const projectLogs = ref<Record<string, string[]>>({}) // path -> log lines
   const layoutMode = ref<'list' | 'grid' | 'monitor'>('list')
   let socket: WebSocket | null = null
@@ -96,19 +99,16 @@ export const useProjectStore = defineStore('project', () => {
       } else if (data.type === 'log') {
         const path = data.path
         if (path) {
-            console.log(`[Log Stream] ${data.project}: ${data.content}`);
             if (!projectLogs.value[path]) {
-              projectLogs.value[path] = []
+                projectLogs.value[path] = []
             }
-            projectLogs.value[path].push(data.content)
-            // Keep last 500 lines
-            if (projectLogs.value[path] && projectLogs.value[path].length > 500) {
-              projectLogs.value[path].shift()
+            projectLogs.value[path].push(data.content) // [v10.3] Fixed field name
+            if (projectLogs.value[path].length > 500) {
+                projectLogs.value[path].shift()
             }
         }
       } else if (data.type === 'log_status') {
-          console.log(`Process for ${data.project} ${data.status}`)
-          const index = projects.value.findIndex(p => p.path === data.path)
+          const index = projects.value.findIndex(p => p.path.toLowerCase() === data.path.toLowerCase())
           if (index !== -1) {
             const project = { ...projects.value[index] } as any
             if (!project.process) {
@@ -118,23 +118,25 @@ export const useProjectStore = defineStore('project', () => {
             if (data.status === 'stopped') {
                 project.process.is_running = false
                 project.process.stats = null
+                project.process.history = undefined
             }
             projects.value[index] = project as any
           }
       } else if (data.type === 'process_stats') {
-        const index = projects.value.findIndex(p => p.path === data.path)
+        const index = projects.value.findIndex(p => p.path.toLowerCase() === data.path.toLowerCase())
         if (index !== -1) {
           const project = { ...projects.value[index] } as any
           if (!project.process) {
-              project.process = { is_running: true, stats: data.stats, has_error: false }
+              project.process = { is_running: true, stats: data.stats, has_error: false, history: data.history }
           } else {
               project.process.stats = data.stats
               project.process.is_running = true
+              project.process.history = data.history
           }
           projects.value[index] = project as any
         }
       } else if (data.type === 'process_error') {
-        const index = projects.value.findIndex(p => p.path === data.path)
+        const index = projects.value.findIndex(p => p.path.toLowerCase() === data.path.toLowerCase())
         if (index !== -1) {
           const project = { ...projects.value[index] } as any
           if (!project.process) {
@@ -156,24 +158,45 @@ export const useProjectStore = defineStore('project', () => {
   }
 
   function scheduleReconnect() {
-    if (retryTimer) clearTimeout(retryTimer)
+    if (retryTimer) return
     retryTimer = window.setTimeout(() => {
+      retryTimer = null
       connect()
     }, 3000)
   }
 
   async function fetchConfig() {
-    try {
-      const response = await fetch('http://127.0.0.1:8000/api/config')
-      const data = await response.json()
-      discoveryRoot.value = data.discovery_root
-    } catch (e) {
-      console.error('Failed to fetch config', e)
-    }
+    const response = await fetch('http://127.0.0.1:8000/api/config')
+    const data = await response.json()
+    discoveryRoot.value = data.discovery_root
+  }
+
+  async function discoverProjects(rootPath: string) {
+    const response = await fetch('http://127.0.0.1:8000/api/discover', { // Fixed Route
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: rootPath })
+    })
+    const data = await response.json()
+    return data.projects || []
+  }
+
+  async function createProject(path: string, name: string, taskFile?: File | null) {
+      const formData = new FormData()
+      formData.append('path', path)
+      formData.append('name', name)
+      if (taskFile) {
+          formData.append('task_file', taskFile)
+      }
+      const response = await fetch('http://127.0.0.1:8000/api/projects/create', {
+          method: 'POST',
+          body: formData
+      })
+      if (!response.ok) throw new Error(await response.text())
   }
 
   async function addProject(path: string) {
-    const response = await fetch('http://127.0.0.1:8000/api/roots', {
+    const response = await fetch('http://127.0.0.1:8000/api/roots', { // Fixed Route (matches main.py POST /api/roots)
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path })
@@ -181,7 +204,7 @@ export const useProjectStore = defineStore('project', () => {
     if (!response.ok) throw new Error(await response.text())
   }
 
-  async function removeProject(path: string, deleteFiles: boolean = false) {
+  async function removeProject(path: string, deleteFiles: boolean) {
     const response = await fetch(`http://127.0.0.1:8000/api/roots?path=${encodeURIComponent(path)}&delete_files=${deleteFiles}`, {
       method: 'DELETE'
     })
@@ -189,19 +212,18 @@ export const useProjectStore = defineStore('project', () => {
   }
 
   async function executeAction(action: string, path: string) {
-    // Clear logs when starting a new session
     if (action === 'start.bat') {
         projectLogs.value[path] = []
     }
 
-    // [v10.4] Optimistic UI Update: immediately mark as not running if stopping
     if (action === 'stop') {
-        const index = projects.value.findIndex(p => p.path === path)
+        const index = projects.value.findIndex(p => p.path.toLowerCase() === path.toLowerCase())
         if (index !== -1) {
             const project = { ...projects.value[index] }
             if (project.process) {
                 project.process.is_running = false
                 project.process.stats = null
+                project.process.history = undefined
                 projects.value[index] = project as any
             }
         }
@@ -219,10 +241,7 @@ export const useProjectStore = defineStore('project', () => {
     const formData = new FormData()
     formData.append('path', path)
     for (let i = 0; i < files.length; i++) {
-      const file = files[i]
-      if (file) {
-        formData.append('files', file)
-      }
+        formData.append('files', files[i])
     }
 
     const response = await fetch('http://127.0.0.1:8000/api/projects/upload', {
@@ -232,46 +251,21 @@ export const useProjectStore = defineStore('project', () => {
     if (!response.ok) throw new Error(await response.text())
   }
 
-  async function discoverProjects(path: string) {
-      const response = await fetch('http://127.0.0.1:8000/api/discover', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ path })
-      })
-      if (!response.ok) throw new Error(await response.text())
-      const data = await response.json()
-      return data.projects
-  }
-
-  async function createProject(parent_path: string, name: string, task_file: File | null) {
-      const formData = new FormData()
-      formData.append('path', parent_path)
-      formData.append('name', name)
-      if (task_file instanceof File) {
-          formData.append('task_file', task_file)
-      }
-
-      const response = await fetch('http://127.0.0.1:8000/api/projects/create', {
-          method: 'POST',
-          body: formData
-      })
-      if (!response.ok) throw new Error(await response.text())
-  }
-
   return {
     projects,
     isConnected,
     discoveryRoot,
     searchQuery,
+    selectedTag,
     projectLogs,
     layoutMode,
     connect,
     fetchConfig,
+    createProject,
     addProject,
     removeProject,
     executeAction,
-    uploadFiles,
     discoverProjects,
-    createProject
+    uploadFiles
   }
 })
