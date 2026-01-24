@@ -75,6 +75,7 @@ export const useProjectStore = defineStore('project', () => {
   const discoveryRoot = ref('')
   const searchQuery = ref('')
   const projectLogs = ref<Record<string, string[]>>({}) // path -> log lines
+  const layoutMode = ref<'list' | 'grid' | 'monitor'>('list')
   let socket: WebSocket | null = null
   let retryTimer: number | null = null
 
@@ -263,6 +264,7 @@ export const useProjectStore = defineStore('project', () => {
     discoveryRoot,
     searchQuery,
     projectLogs,
+    layoutMode,
     connect,
     fetchConfig,
     addProject,

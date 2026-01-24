@@ -77,6 +77,10 @@ const stats = computed(() => {
     const p = store.projects.find(p => p.path === props.projectPath)
     return p?.process?.stats || null
 })
+
+const currentLogs = computed(() => {
+    return store.projectLogs[props.projectPath] || []
+})
 </script>
 
 <template>
@@ -146,14 +150,14 @@ const stats = computed(() => {
                     class="flex-1 overflow-y-auto p-8 font-mono text-[13px] leading-relaxed custom-scrollbar bg-white/[0.01]"
                     style="overflow-anchor: none;"
                 >
-                    <div v-if="!store.projectLogs[projectPath] || store.projectLogs[projectPath].length === 0" class="h-full flex flex-col items-center justify-center text-zinc-600">
+                    <div v-if="currentLogs.length === 0" class="h-full flex flex-col items-center justify-center text-zinc-600">
                         <svg class="w-12 h-12 mb-4 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
                         </svg>
                         <p class="animate-pulse italic opacity-40">Connecting to stream...</p>
                     </div>
                     <div v-else class="space-y-1">
-                        <div v-for="(line, idx) in store.projectLogs[projectPath]" :key="idx" class="group flex">
+                        <div v-for="(line, idx) in currentLogs" :key="idx" class="group flex">
                             <span class="text-zinc-600 mr-4 select-none w-8 text-right font-bold">{{ idx + 1 }}</span>
                             <span class="text-zinc-200 break-all whitespace-pre-wrap" v-html="parseAnsi(line)"></span>
                         </div>
@@ -179,7 +183,7 @@ const stats = computed(() => {
                             <span class="tracking-widest uppercase">{{ autoScroll ? 'Auto-scroll On' : 'Auto-scroll Off' }}</span>
                         </button>
 
-                        <span class="opacity-50 tracking-widest">BUFFER: {{ store.projectLogs[projectPath]?.length || 0 }}/500 lines</span>
+                        <span class="opacity-50 tracking-widest">BUFFER: {{ currentLogs.length }}/500 lines</span>
                     </div>
 
                     <div class="flex items-center space-x-6 uppercase tracking-[0.2em] opacity-30">
