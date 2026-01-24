@@ -40,6 +40,7 @@ class ConnectionManager:
             try:
                 await connection.send_json(message)
             except Exception as e:
-                logger.error(f"Error sending message: {e}")
+                # [v13.2] 連線中斷屬正常現象，使用 Info/Warning 級別即可
+                logger.warning(f"Client dropped during broadcast: {e}")
                 if connection in self.active_connections:
                     self.active_connections.remove(connection)

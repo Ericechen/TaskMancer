@@ -261,8 +261,9 @@ class ProjectManager:
                 return []
             
             scanner = DirectoryScanner(root)
-            # 使用顯式方法調用
-            projects_meta = scanner.scan()
+            # [v13.0] 效能優化：將 IO 密集的掃描操作放入 ThreadPool 執行，避免阻塞 Event Loop
+            loop = asyncio.get_running_loop()
+            projects_meta = await loop.run_in_executor(None, scanner.scan)
             
             for meta in projects_meta:
                 try:

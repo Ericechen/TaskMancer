@@ -1,6 +1,7 @@
 import sqlite3
 import json
 import logging
+import threading
 from pathlib import Path
 from datetime import datetime, timedelta
 
@@ -10,6 +11,7 @@ class DatabaseManager:
     """
     資料庫管理器。
     使用 SQLite 存儲專案指標 (Metrics) 與日誌 (Logs)。
+    [v13.0] 效能優化：使用持久連線與線程鎖，避免頻繁開關連線。
     """
     def __init__(self, db_path: str = "taskmancer.db"):
         """
@@ -19,14 +21,25 @@ class DatabaseManager:
             db_path (str): SQLite 資料庫檔案路徑。
         """
         self.db_path = db_path
+        self._lock = threading.Lock()
+        self._conn = None
         self._init_db()
+
+    def _get_conn(self):
+        """獲取持久的資料庫連線"""
+        if self._conn is None:
+            # check_same_thread=False 允許在不同線程中使用同一個連線（需配合 Lock）
+            self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
+            self._conn.row_factory = sqlite3.Row
+        return self._conn
 
     def _init_db(self):
         """
         初始化資料庫結構。
         建立指標表、日誌表及其索引。
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self._lock:
+            conn = self._get_conn()
             cursor = conn.cursor()
             # 1. 專案指標表 (CPU, RAM 趨勢)
             cursor.execute('''
@@ -57,11 +70,13 @@ class DatabaseManager:
         儲存單筆資源指標。
         """
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self._lock:
+                conn = self._get_conn()
                 conn.execute(
                     "INSERT INTO metrics (project_path, cpu, ram) VALUES (?, ?, ?)",
                     (project_path.lower(), cpu, ram)
                 )
+                conn.commit()
         except Exception as e:
             logger.error(f"DB Error (store_metric): {e}")
 
@@ -70,11 +85,13 @@ class DatabaseManager:
         儲存單筆專案日誌。
         """
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self._lock:
+                conn = self._get_conn()
                 conn.execute(
                     "INSERT INTO logs (project_path, content) VALUES (?, ?)",
                     (project_path.lower(), content)
                 )
+                conn.commit()
         except Exception as e:
             logger.error(f"DB Error (store_log): {e}")
 
@@ -86,8 +103,8 @@ class DatabaseManager:
             limit (int): 返回的最大筆數 (預設 300)。
         """
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                conn.row_factory = sqlite3.Row
+            with self._lock:
+                conn = self._get_conn()
                 cursor = conn.execute(
                     "SELECT cpu, ram FROM metrics WHERE project_path = ? ORDER BY timestamp DESC LIMIT ?",
                     (project_path.lower(), limit)
@@ -107,7 +124,8 @@ class DatabaseManager:
         獲取專案最近的日誌記錄。
         """
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self._lock:
+                conn = self._get_conn()
                 cursor = conn.execute(
                     "SELECT content FROM logs WHERE project_path = ? ORDER BY timestamp DESC LIMIT ?",
                     (project_path.lower(), limit)
@@ -125,7 +143,8 @@ class DatabaseManager:
         """
         try:
             cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
-            with sqlite3.connect(self.db_path) as conn:
+            with self._lock:
+                conn = self._get_conn()
                 conn.execute("DELETE FROM metrics WHERE timestamp < ?", (cutoff,))
                 conn.execute("DELETE FROM logs WHERE timestamp < ?", (cutoff,))
                 conn.execute("VACUUM")
@@ -133,3 +152,9 @@ class DatabaseManager:
             logger.info("Database maintenance: Old data purged.")
         except Exception as e:
             logger.error(f"DB Cleanup Error: {e}")
+
+    def close(self):
+        """關閉資料庫連線（應用程式退出時調用）"""
+        if self._conn:
+            self._conn.close()
+            self._conn = None

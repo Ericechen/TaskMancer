@@ -75,7 +75,17 @@ async def run_project_action(request: CommandRequest):
         if request.action.startswith("antigravity"):
             # Windows: 顯式啟動 Antigravity
             logger.info(f"Opening Antigravity in {path}")
-            os.system(f'cd /d "{path}" && antigravity .')
+            # [v13.1] 使用 subprocess 取代 os.system 以正確處理路徑空格與特殊字元
+            import subprocess
+            try:
+                # 使用 start 命令讓 cmd 視窗獨立彈出
+                subprocess.Popen(
+                    f'start cmd /k "antigravity ."', 
+                    cwd=str(path), 
+                    shell=True # start 是 shell 內建指令，仍需 shell=True，但配合 cwd 參數比 cd && 安全
+                )
+            except Exception as e:
+                logger.error(f"Failed to launch antigravity: {e}")
             return {"status": "success", "message": "Antigravity opened"}
             
         if request.action == "start.bat":

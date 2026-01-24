@@ -23,5 +23,9 @@ async def websocket_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         manager.connection_manager.disconnect(websocket)
     except Exception as e:
-        logger.error(f"WebSocket error: {e}")
+        # [v13.2] 忽略常見的連線關閉錯誤，避免 Error Log 刷屏
+        if "Cannot call" in str(e) or "closed" in str(e):
+            logger.info(f"WebSocket closed (client disconnect): {e}")
+        else:
+            logger.error(f"WebSocket error: {e}")
         manager.connection_manager.disconnect(websocket)
