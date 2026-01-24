@@ -201,7 +201,14 @@ function formatSize(bytes?: number): string {
 </script>
 
 <template>
-  <div class="bg-transparent border border-border p-5 flex flex-col h-full hover:border-accent/50 transition-colors duration-300 relative group rounded-xl">
+  <div 
+    :class="[
+        'bg-transparent border p-5 flex flex-col h-full transition-all duration-500 relative group rounded-xl',
+        project.process?.alert_level === 'critical' ? 'border-danger shadow-[0_0_30px_rgba(239,68,68,0.15)] ring-1 ring-danger bg-danger/5' : 
+        project.process?.alert_level === 'warning' ? 'border-warning shadow-[0_0_20px_rgba(245,158,11,0.1)] bg-warning/5' : 
+        'border-border hover:border-accent/50'
+    ]"
+  >
     <!-- Action Buttons (visible on hover) -->
     <div class="absolute top-4 right-4 flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-all z-10">
         <!-- Unlink Button -->
@@ -217,6 +224,7 @@ function formatSize(bytes?: number): string {
             </svg>
             <svg v-else class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 105.656 5.656l1.1 1.1" />
+                <x-transparent-circle />
                 <line x1="1" y1="1" x2="23" y2="23" stroke="currentColor" stroke-width="2" />
             </svg>
         </button>
@@ -246,9 +254,17 @@ function formatSize(bytes?: number): string {
               <h3 class="text-lg font-display font-medium text-primary tracking-tight truncate">{{ project.name }}</h3>
               
               <!-- Process Badge (v10.4) -->
-              <div v-if="project.process?.is_running" class="flex items-center space-x-2 bg-accent/10 border border-accent/20 px-2 py-0.5 rounded-full ml-1">
-                  <span :class="['w-1.5 h-1.5 rounded-full animate-pulse', project.process.has_error ? 'bg-danger' : 'bg-success']"></span>
-                  <span class="text-[9px] font-bold text-accent uppercase tracking-tighter">Running</span>
+              <div 
+                v-if="project.process?.is_running" 
+                :class="[
+                    'flex items-center space-x-2 px-2 py-0.5 rounded-full ml-1 border',
+                    project.process.alert_level === 'critical' ? 'bg-danger/20 border-danger text-danger' : 
+                    project.process.alert_level === 'warning' ? 'bg-warning/20 border-warning text-warning' : 
+                    'bg-accent/10 border-accent/20 text-accent'
+                ]"
+              >
+                  <span :class="['w-1.5 h-1.5 rounded-full animate-pulse', project.process.alert_level === 'normal' && !project.process.has_error ? 'bg-success' : 'bg-current']"></span>
+                  <span class="text-[9px] font-bold uppercase tracking-tighter">{{ project.process.alert_level === 'normal' ? 'Running' : project.process.alert_level }}</span>
               </div>
           </div>
           <p class="text-[10px] text-secondary font-mono truncate opacity-80 pl-3.5" :title="project.path">

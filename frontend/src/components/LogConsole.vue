@@ -55,9 +55,12 @@ const history = computed(() => project.value?.process?.history || { cpu: [], ram
 const currentLogs = computed(() => store.projectLogs[normalizedPath.value] || [])
 const activeTab = ref<'logs' | 'performance'>('logs')
 
+// Windowing for performance
+const visibleLogs = computed(() => currentLogs.value.slice(-1000))
+
 // Robust auto-scroll watcher
 watch(
-    () => store.projectLogs[normalizedPath.value]?.length,
+    () => currentLogs.value.length,
     () => {
         if (autoScroll.value && scrollContainer.value) {
             nextTick(() => {
@@ -70,9 +73,12 @@ watch(
     { flush: 'post' }
 )
 
-// Initial scroll when opening
-watch(() => props.isOpen, (open) => {
+// Initial scroll and History Fetch
+watch(() => props.isOpen, async (open) => {
     if (open) {
+        // [v12.0] Fetch history from DB
+        await store.ensureLogsLoaded(normalizedPath.value)
+
         nextTick(() => {
             if (scrollContainer.value) {
                 scrollContainer.value.scrollTop = scrollContainer.value.scrollHeight;
@@ -181,21 +187,36 @@ const ramPoints = computed(() => {
 
                 <!-- Content Area -->
                 <div v-if="activeTab === 'logs'" class="flex-1 flex flex-col min-h-0">
+                    <!-- [v12.0] Alert Overlay -->
+                    <div 
+                        v-if="project?.process?.alert_level && project.process.alert_level !== 'normal'"
+                        :class="[
+                            'px-8 py-2 text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-between',
+                            project.process.alert_level === 'critical' ? 'bg-danger text-white' : 'bg-warning text-void'
+                        ]"
+                    >
+                        <span>Resource Threshold Exceeded: {{ project.process.alert_level }}</span>
+                        <div class="flex items-center space-x-4">
+                            <span>CPU: {{ stats?.cpu }}%</span>
+                            <span>RAM: {{ stats?.ram }}MB</span>
+                        </div>
+                    </div>
+
                     <!-- Console Output -->
                     <div 
                         ref="scrollContainer"
                         class="flex-1 overflow-y-auto p-8 font-mono text-[13px] leading-relaxed custom-scrollbar bg-white/[0.01]"
                         style="overflow-anchor: none;"
                     >
-                        <div v-if="currentLogs.length === 0" class="h-full flex flex-col items-center justify-center text-zinc-600">
+                        <div v-if="visibleLogs.length === 0" class="h-full flex flex-col items-center justify-center text-zinc-600">
                             <svg class="w-12 h-12 mb-4 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
                             </svg>
                             <p class="animate-pulse italic opacity-40">Connecting to stream...</p>
                         </div>
                         <div v-else class="space-y-1">
-                            <div v-for="(line, idx) in currentLogs" :key="idx" class="group flex">
-                                <span class="text-zinc-600 mr-4 select-none w-8 text-right font-bold">{{ idx + 1 }}</span>
+                            <div v-for="(line, idx) in visibleLogs" :key="idx" class="group flex" style="content-visibility: auto;">
+                                <span class="text-zinc-600 mr-4 select-none w-10 text-right font-bold opacity-30">{{ idx + 1 }}</span>
                                 <span class="text-zinc-200 break-all whitespace-pre-wrap" v-html="parseAnsi(line)"></span>
                             </div>
                         </div>

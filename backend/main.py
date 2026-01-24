@@ -21,6 +21,7 @@ from git_utils import GitHelper
 from health_utils import get_project_health_report
 from live_utils import get_live_report_async
 from config_parser import ConfigParser
+from db_manager import DatabaseManager
 
 # Configure Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -42,15 +43,17 @@ class RootPathRequest(BaseModel):
     path: str
 
 class RunningProcess:
-    def __init__(self, project_path: str, name: str, connection_manager):
+    def __init__(self, project_path: str, name: str, connection_manager, db_manager: DatabaseManager = None):
         # [v11.2] Force normalize for consistent lookup
         self.project_path = project_path.lower().replace("\\", "/")
         self.name = name
         self.process = None
         self.connection_manager = connection_manager
+        self.db_manager = db_manager
         self.is_running = False
         self.stats = {"cpu": 0, "ram": 0}
         self.has_error = False
+        self.alert_level = "normal" # normal, warning, critical
         # Metrics History (v11.0) - Keep last 300 samples (~5-10 mins)
         self.cpu_history = deque(maxlen=300)
         self.ram_history = deque(maxlen=300)
@@ -95,14 +98,28 @@ class RunningProcess:
                         "ram": round(memory_bytes / (1024 * 1024), 1) # MB
                     }
                     
+                    # [v12.0] Threshold Alert System
+                    new_alert = "normal"
+                    if self.stats["cpu"] > 80 or self.stats["ram"] > 1024:
+                        new_alert = "warning"
+                    if self.stats["cpu"] > 95 or self.stats["ram"] > 2048:
+                        new_alert = "critical"
+                    
+                    self.alert_level = new_alert
+
                     # Update History
                     self.cpu_history.append(self.stats["cpu"])
                     self.ram_history.append(self.stats["ram"])
                     
+                    # [v12.0] Persistence
+                    if self.db_manager:
+                        self.db_manager.store_metric(self.project_path, self.stats["cpu"], self.stats["ram"])
+
                     await self.connection_manager.broadcast({
                         "type": "process_stats",
                         "path": self.project_path,
                         "stats": self.stats,
+                        "alert_level": self.alert_level,
                         "history": {
                             "cpu": list(self.cpu_history),
                             "ram": list(self.ram_history)
@@ -139,6 +156,11 @@ class RunningProcess:
                             })
 
                     logger.info(f"[{self.name}] {text}")
+                    
+                    # [v12.0] Persistence
+                    if self.db_manager:
+                        self.db_manager.store_log(self.project_path, text)
+
                     await self.connection_manager.broadcast({
                         "type": "log",
                         "project": self.name,
@@ -208,6 +230,7 @@ class ProjectManager:
         self.dirty_metrics = set() # paths that need metrics re-scan
         self.active_processes: Dict[str, RunningProcess] = {} # normalized path -> RunningProcess
         self.self_path = self._normalize_path(str(Path(__file__).parent.parent))
+        self.db_manager = DatabaseManager()
         # Initialize CPU tracking (first call returns 0)
         psutil.cpu_percent(interval=None)
 
@@ -234,7 +257,7 @@ class ProjectManager:
         """Allows TaskMancer to monitor its own resources and logs."""
         try:
             logger.info(f"Injecting self-monitoring for TaskMancer at {self.self_path}")
-            proc = RunningProcess(self.self_path, "TaskMancer (Self)", self.connection_manager)
+            proc = RunningProcess(self.self_path, "TaskMancer (Self)", self.connection_manager, db_manager=self.db_manager)
             
             proc.is_running = True
             
@@ -497,7 +520,95 @@ class ProjectManager:
             "system": system_stats
         }
 
-    async def notify_clients(self, force_metrics_paths: Set[str] = None):
+    async def get_project_data_by_path(self, path: str) -> Dict[str, Any]:
+        """Scans and returns data for a single project (for Delta Updates)."""
+        abs_path = os.path.abspath(path)
+        # Find which root it belongs to
+        found_meta = None
+        for root in self.watched_roots:
+            scanner = DirectoryScanner(root)
+            meta = next((m for m in scanner.scan() if self._normalize_path(m['path']) == self._normalize_path(abs_path)), None)
+            if meta:
+                found_meta = meta
+                break
+        
+        if not found_meta: return None
+        
+        parser = TaskParser()
+        parsed = parser.parse_file(found_meta['task_file'])
+        path_obj = Path(abs_path)
+        
+        try:
+            all_files = os.listdir(path_obj)
+            files_lower = [f.lower() for f in all_files]
+            has_start_bat = 'start.bat' in files_lower
+            has_readme = any(f.startswith('readme') for f in files_lower)
+        except:
+            has_start_bat = has_readme = False
+
+        config_path = os.path.join(path_obj, "config.md")
+        has_config = os.path.exists(config_path)
+        project_config = ConfigParser.parse_file(config_path) if has_config else {}
+        final_links = project_config.get('links') or parsed.get('links', [])
+
+        git_helper = GitHelper(abs_path)
+        health_report = get_project_health_report(abs_path)
+        live_report = await get_live_report_async(abs_path, explicit_ports=project_config.get('explicit_ports'))
+        
+        norm_path = self._normalize_path(abs_path)
+        proc = self.active_processes.get(norm_path)
+        
+        # [v12.0] History Restoration from DB
+        cpu_hist = list(proc.cpu_history) if proc else []
+        ram_hist = list(proc.ram_history) if proc else []
+        alert_lvl = proc.alert_level if proc else "normal"
+        
+        if not cpu_hist and self.db_manager:
+            db_h = self.db_manager.get_recent_metrics(norm_path)
+            cpu_hist = db_h['cpu']
+            ram_hist = db_h['ram']
+
+        return {
+            "name": found_meta['name'],
+            "path": abs_path,
+            "tags": found_meta.get('tags', []),
+            "stats": parsed['stats'],
+            "tasks": parsed['tasks'],
+            "links": final_links, 
+            "hasConfig": has_config,
+            "hasStartBat": has_start_bat,
+            "hasReadme": has_readme,
+            "git": git_helper.get_repo_snapshot(),
+            "momentum": git_helper.get_momentum_score(),
+            "health": health_report['health'],
+            "metrics": health_report['metrics'],
+            "live": live_report,
+            "process": {
+                "is_running": proc.is_running if proc else False,
+                "alert_level": alert_lvl,
+                "stats": proc.stats if proc else None,
+                "has_error": proc.has_error if proc else False,
+                "history": {
+                    "cpu": cpu_hist,
+                    "ram": ram_hist
+                }
+            }
+        }
+
+    async def notify_clients(self, force_metrics_paths: Set[str] = None, patch_path: str = None):
+        if patch_path:
+            # [v12.0] Delta Update
+            p_data = await self.get_project_data_by_path(patch_path)
+            if p_data:
+                await self.connection_manager.broadcast({
+                    "type": "project_patch",
+                    "project": p_data
+                })
+                # We still need to update system stats for everyone
+                state = await self.get_current_state()
+                await self.connection_manager.broadcast({"type": "system_stats", "system": state['system']})
+                return
+
         state = await self.get_current_state(force_metrics_paths=force_metrics_paths)
         await self.connection_manager.broadcast(state)
 
@@ -579,6 +690,16 @@ async def get_project_readme(path: str):
     except Exception as e:
         logger.error(f"Error reading README: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/projects/logs")
+async def get_project_logs(path: str, limit: int = 500):
+    try:
+        norm_path = project_manager._normalize_path(path)
+        logs = project_manager.db_manager.get_recent_logs(norm_path, limit=limit)
+        return {"logs": logs}
+    except Exception as e:
+        logger.error(f"Error fetching logs from DB: {e}")
+        return {"logs": []}
 
 class CommandRequest(BaseModel):
     path: str

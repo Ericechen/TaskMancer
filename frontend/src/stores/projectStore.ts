@@ -67,6 +67,7 @@ export interface Project {
     stats?: { cpu: number; ram: number } | null;
     history?: { cpu: number[]; ram: number[] };
     has_error: boolean;
+    alert_level?: 'normal' | 'warning' | 'critical';
   };
   isExpanded?: boolean;
 }
@@ -179,6 +180,19 @@ export const useProjectStore = defineStore('project', () => {
           }
           projects.value[index] = project as any
         }
+      } else if (data.type === 'project_patch') {
+          // [v12.0] Delta Update
+          const p = data.project
+          const path = p.path.toLowerCase().replace(/\\/g, '/')
+          const index = projects.value.findIndex(p => p.path === path)
+          if (index !== -1) {
+              projects.value[index] = { ...p, path }
+          } else {
+              projects.value.push({ ...p, path })
+          }
+      } else if (data.type === 'system_stats') {
+          // [v12.0] Direct system stats update
+          // This will trigger globalMetrics re-computation automatically
       }
     }
 
@@ -218,8 +232,8 @@ export const useProjectStore = defineStore('project', () => {
       const formData = new FormData()
       formData.append('path', path)
       formData.append('name', name)
-      if (taskFile != null) {
-          formData.append('task_file', taskFile)
+      if (taskFile) {
+          formData.append('task_file', taskFile as any)
       }
       const response = await fetch('http://127.0.0.1:8000/api/projects/create', {
           method: 'POST',
@@ -285,6 +299,19 @@ export const useProjectStore = defineStore('project', () => {
     if (!response.ok) throw new Error(await response.text())
   }
 
+  async function ensureLogsLoaded(path: string) {
+      const normPath = path.toLowerCase().replace(/\\/g, '/')
+      if (projectLogs.value[normPath] && projectLogs.value[normPath].length > 0) return
+      
+      try {
+          const response = await fetch(`http://127.0.0.1:8000/api/projects/logs?path=${encodeURIComponent(normPath)}&limit=500`)
+          const data = await response.json()
+          projectLogs.value[normPath] = data.logs || []
+      } catch (e) {
+          console.error('Failed to load historical logs', e)
+      }
+  }
+
   return {
     projects,
     isConnected,
@@ -301,6 +328,7 @@ export const useProjectStore = defineStore('project', () => {
     removeProject,
     executeAction,
     discoverProjects,
-    uploadFiles
+    uploadFiles,
+    ensureLogsLoaded
   }
 })

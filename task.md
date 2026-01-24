@@ -214,4 +214,10 @@
 - [x] **Dashboard 專案負載計量**：首頁儀表板改為顯示「受管專案總耗用」，而非整台電腦總佔用。
 - [x] **路徑自動校準 (Case-Insensitive Standarization)**：解決 Windows 系統下大小寫不一导致的日誌顯示中斷問題。
 
+## v12.0.0 - Industrial Infrastructure (已完成)
+- [x] **💾 記憶力增強：SQLite 持久化**：實現日誌與效能指標的歷史存儲，支援頁面重新整理後的數據還原。
+- [x] **🚀 效能巔峰：Delta Updates**：實作 WebSocket 增量更新協議，大幅降低大規模專案監控時的數據負載。
+- [x] **📄 終端虛擬化渲染**：Log Console 改用窗口化渲染與 `content-visibility` 優化，保持極限日誌下的 60fps。
+- [x] **🚨 智能閾值警報**：自動偵測 CPU (>80%) 與 RAM (>1GB) 異常，並在 UI 提供視覺化警示。
+
 [Link]: https://github.com/Ericechen/TaskMancer

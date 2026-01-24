@@ -67,3 +67,9 @@
 - [x] TaskMancer 原生 PID 監控與後端日誌重定向。
 - [x] Dashboard 專案資源總計列 (Sum-Only mode)。
 - [x] 全面路徑標準化與 Windows 大小寫相容修復。
+
+## v12.0 - Industrial Infrastructure (已完成)
+- [x] SQLite 持久化：Log 與 Metrics 歷史還原。
+- [x] Delta Updates 協議：極緻 WebSocket 效能優化。
+- [x] 日誌渲染虛擬化：解決高頻日誌下的 DOM 壓力問題。
+- [x] 智能警報：偵測資源異常佔用並觸發視覺反饋。

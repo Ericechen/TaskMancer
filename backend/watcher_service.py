@@ -29,7 +29,11 @@ class DebouncedEventHandler(FileSystemEventHandler):
                 return
         
         # 增加 .lock 檔案過濾
-        ignore_patterns = ['/node_modules/', '/__pycache__/', '/.venv/', '/venv/', 'projects.json', '.tmp', '.swp', '.lock']
+        ignore_patterns = [
+            '/node_modules/', '/__pycache__/', '/.venv/', '/venv/', 
+            'projects.json', 'taskmancer.db', '.db-journal', '.db-wal',
+            '.tmp', '.swp', '.lock'
+        ]
         
         if any(p in path for p in ignore_patterns):
             return

@@ -39,15 +39,29 @@ onMounted(() => {
 </script>
 
 <template>
-    <div class="bg-[#0a0a0a]/90 backdrop-blur-3xl border border-white/5 rounded-3xl overflow-hidden flex flex-col h-[500px] shadow-2xl ring-1 ring-white/[0.03]">
+    <div 
+        :class="[
+            'bg-[#0a0a0a]/90 backdrop-blur-3xl border rounded-3xl overflow-hidden flex flex-col h-[500px] shadow-2xl ring-1 transition-all duration-500',
+            project.process?.alert_level === 'critical' ? 'border-danger ring-danger shadow-[0_0_30px_rgba(239,68,68,0.1)]' : 
+            project.process?.alert_level === 'warning' ? 'border-warning ring-warning' : 
+            'border-white/5 ring-white/[0.03]'
+        ]"
+    >
         <!-- Monitor Header (Compact) -->
         <div class="px-8 py-4 border-b border-white/5 bg-white/[0.01] flex items-center justify-between">
             <div class="flex items-center space-x-4">
                 <div class="relative flex items-center justify-center">
-                    <span class="absolute w-3 h-3 rounded-full bg-success opacity-20 animate-ping"></span>
-                    <span class="relative w-2 h-2 rounded-full bg-success"></span>
+                    <span 
+                        class="absolute w-3 h-3 rounded-full opacity-20 animate-ping"
+                        :class="project.process?.alert_level === 'critical' ? 'bg-danger' : project.process?.alert_level === 'warning' ? 'bg-warning' : 'bg-success'"
+                    ></span>
+                    <span 
+                        class="relative w-2 h-2 rounded-full"
+                        :class="project.process?.alert_level === 'critical' ? 'bg-danger' : project.process?.alert_level === 'warning' ? 'bg-warning' : 'bg-success'"
+                    ></span>
                 </div>
                 <h3 class="text-sm font-black text-primary font-mono tracking-tighter uppercase">{{ project.name }}</h3>
+                <span v-if="project.process?.alert_level !== 'normal'" class="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-current/10" :class="project.process?.alert_level === 'critical' ? 'text-danger' : 'text-warning'">{{ project.process?.alert_level }}</span>
                 <span class="text-[9px] text-secondary font-mono opacity-70 truncate max-w-md hidden md:block">{{ project.path }}</span>
             </div>
 
