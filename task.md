@@ -208,4 +208,10 @@
 - [x] **全域基礎設施狀態列**：Monitor 視圖頂部即時顯示所有受管服務的總體資源佔用 (Global CPU/RAM)。
 - [x] **視覺對比度提升**：全站次要文字亮度調優，解決低對比度閱讀壓力。
 
+## v11.2.0 - Self-Observability & Global Telemetry (已完成)
+- [x] **TaskMancer 真．自我監控**：後端自動對接當前 PID，實現「監視著正在監視專案的自己」。
+- [x] **全方位日誌攔截**：實作執線緒安全 WSHandler，將系統核心日誌同步串流至 Web Console。
+- [x] **Dashboard 專案負載計量**：首頁儀表板改為顯示「受管專案總耗用」，而非整台電腦總佔用。
+- [x] **路徑自動校準 (Case-Insensitive Standarization)**：解決 Windows 系統下大小寫不一导致的日誌顯示中斷問題。
+
 [Link]: https://github.com/Ericechen/TaskMancer

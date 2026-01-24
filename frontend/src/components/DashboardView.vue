@@ -42,10 +42,49 @@ const quickWins = computed(() => {
         .sort((a, b) => b.stats.percentage - a.stats.percentage)
         .slice(0, 3)
 })
+
+const system = computed(() => store.globalMetrics)
 </script>
 
 <template>
   <div class="space-y-12">
+    <!-- [v11.2] Infrastructure Load (System-wide) -->
+    <div class="flex flex-wrap items-center gap-12 py-8 px-10 bg-white/[0.01] border border-white/5 rounded-[2rem] shadow-2xl backdrop-blur-3xl animate-fade-in-up">
+        <div class="flex flex-col">
+            <span class="text-[9px] font-black uppercase tracking-[0.4em] text-accent mb-1.5">Machine Telemetry</span>
+            <h4 class="text-xs font-mono font-black text-primary/70">GLOBAL HOST LOAD</h4>
+        </div>
+        
+        <div class="h-10 w-[1px] bg-white/10 hidden md:block"></div>
+
+        <div class="flex items-center space-x-12">
+            <div class="group">
+                <div class="flex items-center space-x-4 mb-2">
+                    <span class="text-[8px] text-secondary/60 uppercase font-black tracking-widest group-hover:text-accent transition-colors">CPU Utilization</span>
+                    <span class="text-xs font-mono font-bold text-accent">{{ system.cpu_percent }}%</span>
+                </div>
+                <div class="w-32 h-1 bg-white/5 rounded-full overflow-hidden">
+                    <div class="h-full bg-accent transition-all duration-1000" :style="{ width: `${system.cpu_percent}%` }"></div>
+                </div>
+            </div>
+
+            <div class="group">
+                <div class="flex items-center space-x-4 mb-2">
+                    <span class="text-[8px] text-secondary/60 uppercase font-black tracking-widest group-hover:text-success transition-colors">Memory Occupancy</span>
+                    <span class="text-xs font-mono font-bold text-success">{{ system.ram_percent }}%</span>
+                </div>
+                <div class="w-32 h-1 bg-white/5 rounded-full overflow-hidden">
+                    <div class="h-full bg-success transition-all duration-1000" :style="{ width: `${system.ram_percent}%` }"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="ml-auto hidden xl:flex flex-col items-end opacity-40">
+            <span class="text-[8px] font-mono font-bold tracking-widest text-secondary uppercase">Resource Capacity</span>
+            <span class="text-[10px] font-mono text-primary font-bold">{{ system.ram_used_gb }}GB / {{ system.ram_total_gb }}GB</span>
+        </div>
+    </div>
+
     <!-- Top Stats Cards (Minimalist) -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-8 pb-12 border-b border-border/50">
         <div class="group">

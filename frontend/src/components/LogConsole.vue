@@ -33,7 +33,7 @@ async function stopProcess() {
 }
 
 function exportLogs() {
-    const logs = store.projectLogs[props.projectPath] || []
+    const logs = store.projectLogs[normalizedPath.value] || []
     const blob = new Blob([logs.join('\n')], { type: 'text/plain' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -47,9 +47,17 @@ function parseAnsi(text: string) {
     return ansi.toHtml(text)
 }
 
+const normalizedPath = computed(() => props.projectPath.toLowerCase().replace(/\\/g, '/'))
+
+const project = computed(() => store.projects.find(p => p.path === normalizedPath.value))
+const stats = computed(() => project.value?.process?.stats || null)
+const history = computed(() => project.value?.process?.history || { cpu: [], ram: [] })
+const currentLogs = computed(() => store.projectLogs[normalizedPath.value] || [])
+const activeTab = ref<'logs' | 'performance'>('logs')
+
 // Robust auto-scroll watcher
 watch(
-    () => store.projectLogs[props.projectPath]?.length,
+    () => store.projectLogs[normalizedPath.value]?.length,
     () => {
         if (autoScroll.value && scrollContainer.value) {
             nextTick(() => {
@@ -72,12 +80,6 @@ watch(() => props.isOpen, (open) => {
         })
     }
 })
-
-const project = computed(() => store.projects.find(p => p.path === props.projectPath))
-const stats = computed(() => project.value?.process?.stats || null)
-const history = computed(() => project.value?.process?.history || { cpu: [], ram: [] })
-const currentLogs = computed(() => store.projectLogs[props.projectPath] || [])
-const activeTab = ref<'logs' | 'performance'>('logs')
 
 // [v11.0] Sparkline Generator
 function generatePoints(data: number[], maxVal: number) {

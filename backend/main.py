@@ -43,7 +43,8 @@ class RootPathRequest(BaseModel):
 
 class RunningProcess:
     def __init__(self, project_path: str, name: str, connection_manager):
-        self.project_path = project_path
+        # [v11.2] Force normalize for consistent lookup
+        self.project_path = project_path.lower().replace("\\", "/")
         self.name = name
         self.process = None
         self.connection_manager = connection_manager
@@ -206,6 +207,9 @@ class ProjectManager:
         self.metrics_cache = {} # path -> metrics_data
         self.dirty_metrics = set() # paths that need metrics re-scan
         self.active_processes: Dict[str, RunningProcess] = {} # normalized path -> RunningProcess
+        self.self_path = self._normalize_path(str(Path(__file__).parent.parent))
+        # Initialize CPU tracking (first call returns 0)
+        psutil.cpu_percent(interval=None)
 
     def _normalize_path(self, path: str) -> str:
         """Normalize path for Windows consistency."""
@@ -213,13 +217,76 @@ class ProjectManager:
         return os.path.abspath(path).lower().replace("\\", "/")
 
     def start_watcher(self):
+        loop = asyncio.get_running_loop()
         self.event_handler = DebouncedEventHandler(
-            loop=asyncio.get_running_loop(),
+            loop=loop,
             callback=self.notify_clients,
             debounce_seconds=0.5
         )
         self.observer.start()
+        
+        # [v11.2] Self-Monitoring Injection (Silent)
+        self.inject_self_monitoring(loop)
+        
         self.load_projects()
+
+    def inject_self_monitoring(self, loop):
+        """Allows TaskMancer to monitor its own resources and logs."""
+        try:
+            logger.info(f"Injecting self-monitoring for TaskMancer at {self.self_path}")
+            proc = RunningProcess(self.self_path, "TaskMancer (Self)", self.connection_manager)
+            
+            proc.is_running = True
+            
+            import psutil
+            try:
+                class MockSubprocess:
+                    def __init__(self, pid): self.pid = pid
+                proc.process = MockSubprocess(os.getpid())
+                
+                asyncio.create_task(proc.monitor_resources())
+                
+                # Setup Thread-Safe Logging Redirect
+                class WSHandler(logging.Handler):
+                    def emit(self, record):
+                        log_entry = self.format(record)
+                        def send():
+                            asyncio.create_task(proc.connection_manager.broadcast({
+                                "type": "log",
+                                "project": "TaskMancer (Self)",
+                                "path": proc.project_path,
+                                "content": log_entry
+                            }))
+                        loop.call_soon_threadsafe(send)
+                
+                ws_h = WSHandler()
+                ws_h.setFormatter(logging.Formatter('%(levelname)s: %(message)s'))
+                logging.getLogger().addHandler(ws_h)
+                
+                self.active_processes[self.self_path] = proc
+                
+                # [v11.2] Immediate Feedback Log + Heartbeat
+                async def heartbeat():
+                    while proc.is_running:
+                        await proc.connection_manager.broadcast({
+                            "type": "log",
+                            "project": "TaskMancer (Self)",
+                            "path": proc.project_path,
+                            "content": "\033[90m[TELEMETRY] System health heartbeat active...\033[0m"
+                        })
+                        await asyncio.sleep(60)
+
+                loop.call_later(2.0, lambda: asyncio.create_task(proc.connection_manager.broadcast({
+                    "type": "log",
+                    "project": "TaskMancer (Self)",
+                    "path": proc.project_path,
+                    "content": "\033[1;32m[SYSTEM] TaskMancer Self-Intelligence Monitoring Online\033[0m"
+                })))
+                asyncio.create_task(heartbeat())
+            except Exception as e:
+                logger.error(f"Failed to attach self-monitor: {e}")
+        except Exception as e:
+            logger.error(f"Self-monitoring injection failed: {e}")
 
     def stop_watcher(self):
         if self.observer:
@@ -403,7 +470,32 @@ class ProjectManager:
                 continue
             all_projects_data.extend(r_list)
             
-        return {"projects": all_projects_data}
+        # [v11.2] Sum metrics from all active projects (not global OS)
+        sum_cpu = 0
+        sum_ram_mb = 0
+        active_count = 0
+        
+        for p in all_projects_data:
+            if p['process']['is_running'] and p['process']['stats']:
+                sum_cpu += p['process']['stats']['cpu']
+                sum_ram_mb += p['process']['stats']['ram']
+                active_count += 1
+        
+        mem_info = psutil.virtual_memory()
+        total_ram_mb = mem_info.total / (1024 * 1024)
+        
+        system_stats = {
+            "cpu_percent": round(sum_cpu, 1),
+            "ram_percent": round((sum_ram_mb / total_ram_mb) * 100, 2), # % based on total system RAM
+            "ram_used_gb": round(sum_ram_mb / 1024, 2),
+            "ram_total_gb": round(total_ram_mb / 1024, 1),
+            "active_count": active_count
+        }
+
+        return {
+            "projects": all_projects_data,
+            "system": system_stats
+        }
 
     async def notify_clients(self, force_metrics_paths: Set[str] = None):
         state = await self.get_current_state(force_metrics_paths=force_metrics_paths)
@@ -506,11 +598,14 @@ async def run_project_action(request: CommandRequest):
             return {"status": "success", "message": "Antigravity opened"}
             
         elif request.action == "start.bat":
+            norm_path = project_manager._normalize_path(str(path))
+            if norm_path == project_manager.self_path:
+                return {"status": "error", "message": "TaskMancer is already running (Self-Managed)."}
+                
             # Managed Start with Log Streaming (v10.3)
             logger.info(f"Managed start request for: {path}")
             
             # Check if already running
-            norm_path = project_manager._normalize_path(str(path))
             if norm_path in project_manager.active_processes:
                 proc = project_manager.active_processes[norm_path]
                 if proc.is_running:
@@ -528,12 +623,10 @@ async def run_project_action(request: CommandRequest):
                     project_name = meta['name']
                     break
 
-            proc = RunningProcess(str(path), project_name, project_manager.connection_manager)
+            proc = RunningProcess(norm_path, project_name, project_manager.connection_manager)
             project_manager.active_processes[norm_path] = proc
             
             # Execute start.bat with explicit path and CI environment
-            # Note: create_subprocess_shell on Windows already uses 'cmd /c'
-            # We only need to provide the quoted path to the batch file
             abs_bat_path = os.path.abspath(os.path.join(str(path), "start.bat"))
             await proc.start(f'"{abs_bat_path}"', {**env_vars, "CI": "true"})
             
@@ -541,6 +634,9 @@ async def run_project_action(request: CommandRequest):
             
         elif request.action == "stop":
             norm_path = project_manager._normalize_path(str(path))
+            if norm_path == project_manager.self_path:
+                return {"status": "error", "message": "Cannot stop TaskMancer core via dashboard (Self-Protection)."}
+
             if norm_path in project_manager.active_processes:
                 proc = project_manager.active_processes[norm_path]
                 proc.stop()

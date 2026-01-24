@@ -8,7 +8,7 @@ import MonitorTile from './MonitorTile.vue'
 const store = useProjectStore()
 
 function getLatestLogs(path: string) {
-    const logs = store.projectLogs[path] || []
+    const logs = store.projectLogs[path.toLowerCase().replace(/\\/g, '/')] || []
     return logs.slice(-50)
 }
 
@@ -56,22 +56,7 @@ async function handleAction(action: string, path: string) {
 }
 
 // [v11.1] Total Resource Consumption
-const totalMonitorStats = computed(() => {
-    let cpu = 0
-    let ram = 0
-    const active = store.projects.filter(p => p.process?.is_running)
-    active.forEach(p => {
-        if (p.process?.stats) {
-            cpu += p.process.stats.cpu
-            ram += p.process.stats.ram
-        }
-    })
-    return { 
-        cpu: cpu.toFixed(1), 
-        ram: ram.toFixed(1),
-        count: active.length
-    }
-})
+const totalMonitorStats = computed(() => store.globalMetrics)
 </script>
 
 <template>
@@ -179,11 +164,11 @@ const totalMonitorStats = computed(() => {
                        <div class="flex items-center space-x-16">
                            <div class="flex flex-col">
                                <span class="text-[8px] text-secondary/40 uppercase font-black mb-1.5 tracking-widest">Total CPU</span>
-                               <span class="text-4xl font-mono font-black text-primary tracking-tighter">{{ totalMonitorStats.cpu }}<span class="text-sm ml-1 opacity-30">%</span></span>
+                               <span class="text-4xl font-mono font-black text-primary tracking-tighter">{{ totalMonitorStats.cpu_percent }}<span class="text-sm ml-1 opacity-30">%</span></span>
                            </div>
                            <div class="flex flex-col">
                                <span class="text-[8px] text-secondary/40 uppercase font-black mb-1.5 tracking-widest">Global Memory</span>
-                               <span class="text-4xl font-mono font-black text-primary tracking-tighter">{{ totalMonitorStats.ram }}<span class="text-sm ml-1 opacity-30">MB</span></span>
+                               <span class="text-4xl font-mono font-black text-primary tracking-tighter">{{ totalMonitorStats.ram_used_gb }}<span class="text-sm ml-1 opacity-30">GB</span></span>
                            </div>
                        </div>
                    </div>

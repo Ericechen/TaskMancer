@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 
 export interface Task {
   text: string;
@@ -79,6 +79,30 @@ export const useProjectStore = defineStore('project', () => {
   const selectedTag = ref('')
   const projectLogs = ref<Record<string, string[]>>({}) // path -> log lines
   const layoutMode = ref<'list' | 'grid' | 'monitor'>('list')
+  const totalSystemRamMb = ref(16384) // Placeholder, updated on connect
+  
+  // [v11.2] Reactive Global Aggregator
+  const globalMetrics = computed(() => {
+    let cpu = 0
+    let ramMb = 0
+    let activeCount = 0
+    
+    projects.value.forEach(p => {
+        if (p.process?.is_running && p.process?.stats) {
+            cpu += p.process.stats.cpu
+            ramMb += p.process.stats.ram
+            activeCount++
+        }
+    })
+    
+    return {
+        cpu_percent: cpu.toFixed(1),
+        ram_used_gb: (ramMb / 1024).toFixed(2),
+        ram_percent: ((ramMb / totalSystemRamMb.value) * 100).toFixed(2),
+        ram_total_gb: (totalSystemRamMb.value / 1024).toFixed(1),
+        count: activeCount
+    }
+  })
   let socket: WebSocket | null = null
   let retryTimer: number | null = null
 
@@ -95,14 +119,21 @@ export const useProjectStore = defineStore('project', () => {
     socket.onmessage = (event) => {
       const data = JSON.parse(event.data)
       if (data.projects) {
-        projects.value = data.projects
+        projects.value = data.projects.map((p: any) => ({
+            ...p,
+            path: p.path.toLowerCase().replace(/\\/g, '/') // [v11.2] Standardize
+        }))
+        if (data.system) {
+            // Update total capacity one time or periodically
+            totalSystemRamMb.value = data.system.ram_total_gb * 1024
+        }
       } else if (data.type === 'log') {
-        const path = data.path
+        const path = data.path?.toLowerCase().replace(/\\/g, '/')
         if (path) {
             if (!projectLogs.value[path]) {
                 projectLogs.value[path] = []
             }
-            projectLogs.value[path].push(data.content) // [v10.3] Fixed field name
+            projectLogs.value[path].push(data.content)
             if (projectLogs.value[path].length > 500) {
                 projectLogs.value[path].shift()
             }
@@ -123,7 +154,8 @@ export const useProjectStore = defineStore('project', () => {
             projects.value[index] = project as any
           }
       } else if (data.type === 'process_stats') {
-        const index = projects.value.findIndex(p => p.path.toLowerCase() === data.path.toLowerCase())
+        const path = data.path?.toLowerCase().replace(/\\/g, '/')
+        const index = projects.value.findIndex(p => p.path === path)
         if (index !== -1) {
           const project = { ...projects.value[index] } as any
           if (!project.process) {
@@ -136,7 +168,8 @@ export const useProjectStore = defineStore('project', () => {
           projects.value[index] = project as any
         }
       } else if (data.type === 'process_error') {
-        const index = projects.value.findIndex(p => p.path.toLowerCase() === data.path.toLowerCase())
+        const path = data.path?.toLowerCase().replace(/\\/g, '/')
+        const index = projects.value.findIndex(p => p.path === path)
         if (index !== -1) {
           const project = { ...projects.value[index] } as any
           if (!project.process) {
@@ -185,7 +218,7 @@ export const useProjectStore = defineStore('project', () => {
       const formData = new FormData()
       formData.append('path', path)
       formData.append('name', name)
-      if (taskFile) {
+      if (taskFile != null) {
           formData.append('task_file', taskFile)
       }
       const response = await fetch('http://127.0.0.1:8000/api/projects/create', {
@@ -212,8 +245,9 @@ export const useProjectStore = defineStore('project', () => {
   }
 
   async function executeAction(action: string, path: string) {
+    const normPath = path.toLowerCase().replace(/\\/g, '/')
     if (action === 'start.bat') {
-        projectLogs.value[path] = []
+        projectLogs.value[normPath] = []
     }
 
     if (action === 'stop') {
@@ -259,6 +293,7 @@ export const useProjectStore = defineStore('project', () => {
     selectedTag,
     projectLogs,
     layoutMode,
+    globalMetrics,
     connect,
     fetchConfig,
     createProject,

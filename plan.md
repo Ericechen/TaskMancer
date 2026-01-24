@@ -62,3 +62,8 @@
 - [x] 水平分割 NOC 監控模式。
 - [x] 全域基礎設施資源狀態列。
 - [x] 監控面板自動滾動與對比度調優。
+
+## v11.2 - Self-Observability (已完成)
+- [x] TaskMancer 原生 PID 監控與後端日誌重定向。
+- [x] Dashboard 專案資源總計列 (Sum-Only mode)。
+- [x] 全面路徑標準化與 Windows 大小寫相容修復。
