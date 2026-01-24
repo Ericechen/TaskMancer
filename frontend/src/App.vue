@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue'
 import { useProjectStore } from './stores/projectStore'
 import ProjectList from './components/ProjectList.vue'
 import DashboardView from './components/DashboardView.vue'
+import DependencyGraph from './components/DependencyGraph.vue'
 import { $swal, Toast } from './utils/swal'
 
 const store = useProjectStore()
@@ -186,7 +187,7 @@ async function handleCreate() {
           <!-- Layout Switcher (v10.6) -->
           <div v-if="currentView === 'projects'" class="bg-surface/50 p-1 rounded-lg flex space-x-1 border border-white/5 ml-4 shadow-inner">
               <button 
-                  v-for="mode in ['list', 'grid', 'monitor']" 
+                  v-for="mode in ['list', 'grid', 'monitor', 'graph']" 
                   :key="mode"
                   @click="store.layoutMode = mode as any"
                   :class="store.layoutMode === mode ? 'bg-accent text-white shadow-lg scale-105 border-accent' : 'text-secondary hover:text-primary border-transparent opacity-60 hover:opacity-100'"
@@ -204,6 +205,10 @@ async function handleCreate() {
                   <!-- Matrix Icon -->
                   <svg v-else-if="mode === 'monitor'" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                  <!-- Graph Icon -->
+                  <svg v-else-if="mode === 'graph'" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
                   </svg>
               </button>
           </div>
@@ -259,7 +264,7 @@ async function handleCreate() {
     <main class="max-w-7xl mx-auto animate-fade-in-up" style="animation-delay: 100ms;">
         <transition name="fade" mode="out-in">
              <KeepAlive>
-                <component :is="currentView === 'dashboard' ? DashboardView : ProjectList" />
+                <component :is="currentView === 'dashboard' ? DashboardView : (store.layoutMode === 'graph' ? DependencyGraph : ProjectList)" />
              </KeepAlive>
         </transition>
     </main>

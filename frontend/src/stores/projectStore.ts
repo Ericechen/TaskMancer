@@ -80,7 +80,7 @@ export const useProjectStore = defineStore('project', () => {
   const searchQuery = ref('')
   const selectedTag = ref('')
   const projectLogs = ref<Record<string, string[]>>({}) // path -> log lines
-  const layoutMode = ref<'list' | 'grid' | 'monitor'>('list')
+  const layoutMode = ref<'list' | 'grid' | 'monitor' | 'graph'>('list')
   const totalSystemRamMb = ref(16384) // Placeholder, updated on connect
   
   // [v11.2] Reactive Global Aggregator
