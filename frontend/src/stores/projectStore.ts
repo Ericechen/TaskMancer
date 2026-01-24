@@ -53,6 +53,7 @@ export interface Project {
   stats: ProjectStats;
   tasks: Task[];
   links: string[];
+  depends_on: string[];
   hasConfig: boolean;
   hasStartBat: boolean;
   hasReadme: boolean;
@@ -289,7 +290,10 @@ export const useProjectStore = defineStore('project', () => {
     const formData = new FormData()
     formData.append('path', path)
     for (let i = 0; i < files.length; i++) {
-        formData.append('files', files[i])
+        const file = files[i]
+        if (file) {
+            formData.append('files', file as any)
+        }
     }
 
     const response = await fetch('http://127.0.0.1:8000/api/projects/upload', {

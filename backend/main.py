@@ -463,6 +463,7 @@ class ProjectManager:
                         "stats": parsed['stats'],
                         "tasks": parsed['tasks'],
                         "links": final_links, 
+                        "depends_on": project_config.get('depends_on', []), # [v12.1]
                         "hasConfig": has_config,
                         "hasStartBat": has_start_bat,
                         "hasReadme": has_readme,
@@ -473,6 +474,7 @@ class ProjectManager:
                         "live": live_report,
                         "process": {
                             "is_running": proc.is_running if proc else False,
+                            "alert_level": proc.alert_level if proc else "normal",
                             "stats": proc.stats if proc else None,
                             "has_error": proc.has_error if proc else False,
                             "history": {
@@ -575,6 +577,7 @@ class ProjectManager:
             "stats": parsed['stats'],
             "tasks": parsed['tasks'],
             "links": final_links, 
+            "depends_on": project_config.get('depends_on', []), # [v12.1]
             "hasConfig": has_config,
             "hasStartBat": has_start_bat,
             "hasReadme": has_readme,
@@ -718,40 +721,47 @@ async def run_project_action(request: CommandRequest):
             os.system(f'cd /d "{path}" && antigravity .')
             return {"status": "success", "message": "Antigravity opened"}
             
-        elif request.action == "start.bat":
-            norm_path = project_manager._normalize_path(str(path))
-            if norm_path == project_manager.self_path:
-                return {"status": "error", "message": "TaskMancer is already running (Self-Managed)."}
+        if request.action == "start.bat":
+            async def smart_start(target_path: Path):
+                n_path = project_manager._normalize_path(str(target_path))
+                if n_path == project_manager.self_path: return
                 
-            # Managed Start with Log Streaming (v10.3)
-            logger.info(f"Managed start request for: {path}")
-            
-            # Check if already running
-            if norm_path in project_manager.active_processes:
-                proc = project_manager.active_processes[norm_path]
-                if proc.is_running:
-                    return {"status": "already_running", "message": "Process is already streaming logs."}
+                # 1. Parse Config for Dependencies
+                c_path = target_path / "config.md"
+                p_config = ConfigParser.parse_file(str(c_path)) if c_path.exists() else {}
+                deps = p_config.get('depends_on', [])
+                
+                # 2. Chain Start Dependencies
+                if deps:
+                   logger.info(f"Checking dependencies for {target_path.name}: {deps}")
+                   all_projects = await project_manager.get_current_state()
+                   for dep_name_or_path in deps:
+                       # Find project by name or path
+                       dep_proj = next((p for p in all_projects['projects'] if p['name'] == dep_name_or_path or project_manager._normalize_path(p['path']) == project_manager._normalize_path(dep_name_or_path)), None)
+                       if dep_proj:
+                           dep_norm = project_manager._normalize_path(dep_proj['path'])
+                           is_running = dep_norm in project_manager.active_processes and project_manager.active_processes[dep_norm].is_running
+                           if not is_running:
+                               logger.info(f"Auto-starting dependency: {dep_proj['name']}")
+                               await smart_start(Path(dep_proj['path']))
+                
+                # 3. Start Actual Project
+                if n_path in project_manager.active_processes and project_manager.active_processes[n_path].is_running:
+                    return # Already up
 
-            config_path = path / "config.md"
-            env_vars = ConfigParser.get_env_vars(str(config_path)) if config_path.exists() else {}
-            
-            # Find the project name for logging
-            project_name = path.name
-            for root in project_manager.watched_roots:
-                scanner = DirectoryScanner(root)
-                meta = next((m for m in scanner.scan() if m['path'] == str(path)), None)
-                if meta:
-                    project_name = meta['name']
-                    break
+                # Find metadata for naming
+                p_name = target_path.name
+                e_vars = ConfigParser.get_env_vars(str(c_path)) if c_path.exists() else {}
+                
+                proc = RunningProcess(n_path, p_name, project_manager.connection_manager, db_manager=project_manager.db_manager)
+                project_manager.active_processes[n_path] = proc
+                abs_bat = os.path.abspath(os.path.join(str(target_path), "start.bat"))
+                if os.path.exists(abs_bat):
+                    await proc.start(f'"{abs_bat}"', {**e_vars, "CI": "true"})
+                    logger.info(f"Started project: {p_name}")
 
-            proc = RunningProcess(norm_path, project_name, project_manager.connection_manager)
-            project_manager.active_processes[norm_path] = proc
-            
-            # Execute start.bat with explicit path and CI environment
-            abs_bat_path = os.path.abspath(os.path.join(str(path), "start.bat"))
-            await proc.start(f'"{abs_bat_path}"', {**env_vars, "CI": "true"})
-            
-            return {"status": "success", "message": "Process started with streaming logs"}
+            await smart_start(path)
+            return {"status": "success", "message": "Project and dependencies starting..."}
             
         elif request.action == "stop":
             norm_path = project_manager._normalize_path(str(path))

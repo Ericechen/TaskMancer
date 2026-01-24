@@ -201,14 +201,7 @@ function formatSize(bytes?: number): string {
 </script>
 
 <template>
-  <div 
-    :class="[
-        'bg-transparent border p-5 flex flex-col h-full transition-all duration-500 relative group rounded-xl',
-        project.process?.alert_level === 'critical' ? 'border-danger shadow-[0_0_30px_rgba(239,68,68,0.15)] ring-1 ring-danger bg-danger/5' : 
-        project.process?.alert_level === 'warning' ? 'border-warning shadow-[0_0_20px_rgba(245,158,11,0.1)] bg-warning/5' : 
-        'border-border hover:border-accent/50'
-    ]"
-  >
+  <div class="bg-transparent border border-border p-5 flex flex-col h-full hover:border-accent/50 transition-all duration-300 relative group rounded-xl">
     <!-- Action Buttons (visible on hover) -->
     <div class="absolute top-4 right-4 flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-all z-10">
         <!-- Unlink Button -->
@@ -224,7 +217,6 @@ function formatSize(bytes?: number): string {
             </svg>
             <svg v-else class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 105.656 5.656l1.1 1.1" />
-                <x-transparent-circle />
                 <line x1="1" y1="1" x2="23" y2="23" stroke="currentColor" stroke-width="2" />
             </svg>
         </button>
@@ -258,13 +250,13 @@ function formatSize(bytes?: number): string {
                 v-if="project.process?.is_running" 
                 :class="[
                     'flex items-center space-x-2 px-2 py-0.5 rounded-full ml-1 border',
-                    project.process.alert_level === 'critical' ? 'bg-danger/20 border-danger text-danger' : 
+                    (project.process.alert_level === 'critical' || project.process.has_error) ? 'bg-danger/20 border-danger text-danger' : 
                     project.process.alert_level === 'warning' ? 'bg-warning/20 border-warning text-warning' : 
                     'bg-accent/10 border-accent/20 text-accent'
                 ]"
               >
-                  <span :class="['w-1.5 h-1.5 rounded-full animate-pulse', project.process.alert_level === 'normal' && !project.process.has_error ? 'bg-success' : 'bg-current']"></span>
-                  <span class="text-[9px] font-bold uppercase tracking-tighter">{{ project.process.alert_level === 'normal' ? 'Running' : project.process.alert_level }}</span>
+                  <span :class="['w-1.5 h-1.5 rounded-full animate-pulse', project.process.has_error ? 'bg-danger' : 'bg-success']"></span>
+                  <span class="text-[9px] font-bold uppercase tracking-tighter">LIVE</span>
               </div>
           </div>
           <p class="text-[10px] text-secondary font-mono truncate opacity-80 pl-3.5" :title="project.path">
@@ -326,6 +318,43 @@ function formatSize(bytes?: number): string {
                   >
                       <span :class="['w-1.5 h-1.5 rounded-full', item.status === 'online' ? 'bg-success animate-pulse' : 'bg-void border border-secondary/30']"></span>
                       <span>{{ item.label || 'Live' }}: {{ item.port }}</span>
+                  </a>
+              </div>
+
+              <!-- Row 3: Dependencies [v12.1] -->
+              <div v-if="project.depends_on?.length" class="flex items-center flex-wrap gap-2 mt-1">
+                  <span class="text-[8px] font-black text-secondary/40 uppercase tracking-widest">Linked:</span>
+                  <div 
+                    v-for="dep in project.depends_on" 
+                    :key="dep"
+                    class="flex items-center space-x-1.5 px-2 py-0.5 rounded-md bg-white/[0.03] border border-white/5"
+                  >
+                        <span 
+                            class="w-1 h-1 rounded-full"
+                            :class="projectStore.projects.find(p => p.name === dep || p.path.toLowerCase().replace(/\\/g, '/') === dep.toLowerCase().replace(/\\/g, '/'))?.process?.is_running ? 'bg-accent/80 shadow-[0_0_5px_rgba(139,92,246,0.5)]' : 'bg-secondary/20'"
+                        ></span>
+                        <span class="text-[9px] font-bold text-secondary/80">{{ dep }}</span>
+                  </div>
+              </div>
+
+
+              <!-- Row 4: External Links -->
+              <div v-if="project.links && project.links.length" class="flex items-center flex-wrap gap-3 mt-1.5 pl-0.5">
+                  <a 
+                      v-for="link in project.links" 
+                      :key="link"
+                      :href="link"
+                      target="_blank"
+                      class="flex items-center space-x-1.5 text-[10px] text-secondary/60 hover:text-accent transition-colors group/link"
+                      title="External Link"
+                  >
+                      <svg v-if="link.includes('github.com')" class="w-3.5 h-3.5 opacity-80 group-hover/link:opacity-100" fill="currentColor" viewBox="0 0 24 24">
+                          <path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd" />
+                      </svg>
+                      <svg v-else class="w-3.5 h-3.5 opacity-80 group-hover/link:opacity-100" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                      <span class="underline decoration-border/30 underline-offset-2 group-hover/link:decoration-accent/50">{{ link.includes('github') ? 'GitHub' : (link.replace(/^https?:\/\/(www\.)?/, '').split('/')[0] || 'Link') }}</span>
                   </a>
               </div>
           </div>

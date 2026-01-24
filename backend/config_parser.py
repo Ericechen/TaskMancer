@@ -12,13 +12,16 @@ class ConfigParser:
     PORT_PATTERN = re.compile(r'Port\s*:\s*(?P<label>[^:]+)\s*:\s*(?P<port>\d+)', re.IGNORECASE)
     # 支援格式: [Link]: URL
     LINK_PATTERN = re.compile(r'\[Link\]:\s*(?P<url>https?://[^\s]+)', re.IGNORECASE)
+    # 支援格式: DependsOn : [ProjectName or Path]
+    DEPENDS_PATTERN = re.compile(r'DependsOn\s*:\s*(?P<deps>.+)', re.IGNORECASE)
 
     @classmethod
     def parse_file(cls, file_path: str) -> Dict[str, Any]:
         """解析 config.md 並返回配置數據"""
         config = {
             "explicit_ports": [], # List of {label: str, port: int}
-            "links": []
+            "links": [],
+            "depends_on": []
         }
         
         if not os.path.exists(file_path):
@@ -47,6 +50,15 @@ class ConfigParser:
                     if link_match:
                         url = link_match.group('url').strip()
                         config["links"].append(url)
+                        continue
+
+                    # 匹配 DependsOn
+                    depends_match = cls.DEPENDS_PATTERN.search(line)
+                    if depends_match:
+                        raw_deps = depends_match.group('deps').strip()
+                        # Allow comma separated or single
+                        parts = [p.strip() for p in raw_deps.split(',')]
+                        config["depends_on"].extend([p for p in parts if p])
                         
         except Exception as e:
             logger.error(f"Error parsing config file {file_path}: {e}")
