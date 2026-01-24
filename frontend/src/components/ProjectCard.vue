@@ -6,6 +6,8 @@ import Swal from 'sweetalert2'
 import DOMPurify from 'dompurify'
 import { marked } from 'marked'
 import LogConsole from './LogConsole.vue'
+import ProjectGitInfo from './ProjectGitInfo.vue'
+import ProjectRuntime from './ProjectRuntime.vue'
 
 const props = defineProps<{
   project: Project
@@ -264,99 +266,10 @@ function formatSize(bytes?: number): string {
           </p>
       </div>
           
-      <!-- Status Rows Container -->
-      <div class="flex flex-col gap-1.5 pl-3.5 mt-1 relative">
-          
-          <!-- Row 1: Git Info -->
-          <div v-if="project.git && project.git.is_git" class="flex items-center w-full gap-x-3 gap-y-1 text-[10px] font-mono flex-wrap">
-                  <!-- Branch -->
-                  <div class="flex items-center text-primary/80">
-                      <svg class="w-3 h-3 mr-1 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
-                      </svg>
-                      <span>{{ project.git.branch }}</span>
-                  </div>
-                  
-                  <!-- Sync Status -->
-                  <div v-if="project.git.sync_status && project.git.sync_status !== 'Not checked'" class="flex items-center px-1.5 py-0.25 rounded bg-surface/50 border border-border/30">
-                      <span :class="{
-                          'text-success/90': project.git.sync_status === 'Synced',
-                          'text-accent/90': project.git.sync_status.includes('Ahead'),
-                          'text-warning/90': project.git.sync_status.includes('Behind') || project.git.sync_status.includes('Diverged')
-                      }">{{ project.git.sync_status }}</span>
-                  </div>
-
-                  <!-- Uncommitted -->
-                  <div v-if="project.git.uncommitted > 0" class="text-danger flex items-center">
-                      <span class="w-1 h-1 rounded-full bg-danger animate-pulse mr-1"></span>
-                      {{ project.git.uncommitted }} changes
-                  </div>
-
-                  <!-- Momentum (Right Aligned in Row 1) -->
-                  <div v-if="project.momentum !== undefined" class="ml-auto flex items-center text-secondary/80" title="Activities (Commits) in last 7 days">
-                      <svg class="w-3 h-3 mr-1 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                      </svg>
-                      <span>{{ project.momentum }} act</span>
-                  </div>
-              </div>
-
-              <!-- Row 2: Live Ports -->
-              <div v-if="project.hasConfig && project.live?.active_ports?.length" class="flex items-center flex-wrap gap-1 pr-12">
-                  <a 
-                      v-for="item in project.live.active_ports" 
-                      :key="item.port"
-                      :href="item.status === 'online' ? `http://localhost:${item.port}` : 'javascript:void(0)'"
-                      target="_blank"
-                      :class="[
-                          'flex items-center space-x-1 px-1.5 py-0.25 rounded border text-[9px] font-bold transition-all',
-                          item.status === 'online' 
-                            ? 'bg-success/10 border-success/30 text-success' 
-                            : 'bg-void/50 border-border/50 text-secondary opacity-50 cursor-not-allowed'
-                      ]"
-                      :title="item.status === 'online' ? `Open ${item.label || 'service'} on port ${item.port}` : `${item.label || 'Service'} is offline`"
-                  >
-                      <span :class="['w-1.5 h-1.5 rounded-full', item.status === 'online' ? 'bg-success animate-pulse' : 'bg-void border border-secondary/30']"></span>
-                      <span>{{ item.label || 'Live' }}: {{ item.port }}</span>
-                  </a>
-              </div>
-
-              <!-- Row 3: Dependencies [v12.1] -->
-              <div v-if="project.depends_on?.length" class="flex items-center flex-wrap gap-2 mt-1">
-                  <span class="text-[8px] font-black text-secondary/40 uppercase tracking-widest">Linked:</span>
-                  <div 
-                    v-for="dep in project.depends_on" 
-                    :key="dep"
-                    class="flex items-center space-x-1.5 px-2 py-0.5 rounded-md bg-white/[0.03] border border-white/5"
-                  >
-                        <span 
-                            class="w-1 h-1 rounded-full"
-                            :class="projectStore.projects.find(p => p.name === dep || p.path.toLowerCase().replace(/\\/g, '/') === dep.toLowerCase().replace(/\\/g, '/'))?.process?.is_running ? 'bg-accent/80 shadow-[0_0_5px_rgba(139,92,246,0.5)]' : 'bg-secondary/20'"
-                        ></span>
-                        <span class="text-[9px] font-bold text-secondary/80">{{ dep }}</span>
-                  </div>
-              </div>
-
-
-              <!-- Row 4: External Links -->
-              <div v-if="project.links && project.links.length" class="flex items-center flex-wrap gap-3 mt-1.5 pl-0.5">
-                  <a 
-                      v-for="link in project.links" 
-                      :key="link"
-                      :href="link"
-                      target="_blank"
-                      class="flex items-center space-x-1.5 text-[10px] text-secondary/60 hover:text-accent transition-colors group/link"
-                      title="External Link"
-                  >
-                      <svg v-if="link.includes('github.com')" class="w-3.5 h-3.5 opacity-80 group-hover/link:opacity-100" fill="currentColor" viewBox="0 0 24 24">
-                          <path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd" />
-                      </svg>
-                      <svg v-else class="w-3.5 h-3.5 opacity-80 group-hover/link:opacity-100" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                      </svg>
-                      <span class="underline decoration-border/30 underline-offset-2 group-hover/link:decoration-accent/50">{{ link.includes('github') ? 'GitHub' : (link.replace(/^https?:\/\/(www\.)?/, '').split('/')[0] || 'Link') }}</span>
-                  </a>
-              </div>
+          <!-- Meta Info Container -->
+          <div class="flex flex-col gap-1 pl-3.5 mt-1 relative">
+              <ProjectGitInfo :project="project" />
+              <ProjectRuntime :project="project" />
           </div>
       </div>
 
