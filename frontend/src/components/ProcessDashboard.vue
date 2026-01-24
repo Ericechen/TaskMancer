@@ -42,7 +42,7 @@ async function stopProcess(path: string, name: string) {
             <div 
                 v-for="project in runningProjects" 
                 :key="project.path"
-                class="bg-surface/30 backdrop-blur-md border border-white/5 rounded-2xl p-4 flex items-center justify-between group hover:border-accent/30 transition-all shadow-lg"
+                class="bg-surface/30 backdrop-blur-md border border-white/5 rounded-2xl p-4 flex items-start justify-between group hover:border-accent/30 transition-all shadow-lg"
             >
                 <div class="flex items-center space-x-4">
                     <div class="relative">
@@ -61,6 +61,18 @@ async function stopProcess(path: string, name: string) {
                         <div class="flex items-center space-x-3 mt-1 font-mono text-[10px]">
                             <span class="text-success">{{ project.process?.stats?.cpu }}% CPU</span>
                             <span class="text-secondary/60">{{ project.process?.stats?.ram }} MB</span>
+                            
+                            <!-- Ports Display -->
+                            <div v-if="project.live?.active_ports?.length" class="flex gap-1 ml-2 pl-2 border-l border-white/10">
+                                <span 
+                                    v-for="portInfo in project.live?.active_ports" 
+                                    :key="portInfo.port"
+                                    class="px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1"
+                                    :title="portInfo.label || 'Active Port'"
+                                >
+                                    <span class="opacity-50 text-[8px]">#</span>{{ portInfo.port }}
+                                </span>
+                            </div>
                         </div>
                     </div>
                 </div>
