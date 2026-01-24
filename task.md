@@ -220,4 +220,10 @@
 - [x] **📄 終端虛擬化渲染**：Log Console 改用窗口化渲染與 `content-visibility` 優化，保持極限日誌下的 60fps。
 - [x] **🚨 智能閾值警報**：自動偵測 CPU (>80%) 與 RAM (>1GB) 異常，並在 UI 提供視覺化警示。
 
+## v12.1.0 - Frontend Refactoring & Optimization (已完成)
+- [x] **ProjectCard 重構**：拆分為多個子組件 (GitInfo, Runtime, Links) 以提升維護性。
+- [x] **效能優化 (Memoization)**：使用 Computed Property 緩存依賴項狀態，優化 O(1) 渲染效能。
+- [x] **邏輯抽離**：將核心操作邏輯抽離至 `useProjectActions` Composable。
+- [x] **交互增強**：優化依賴項與連結的 UI 互動與智能標籤顯示。
+
 [Link]: https://github.com/Ericechen/TaskMancer
