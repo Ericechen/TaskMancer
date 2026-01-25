@@ -4,10 +4,8 @@ import { useProjectStore } from './stores/projectStore'
 import ProjectList from './components/ProjectList.vue'
 import DashboardView from './components/DashboardView.vue'
 import DependencyGraph from './components/DependencyGraph.vue'
-import TrayInterface from './components/TrayInterface.vue'
 import { $swal, Toast } from './utils/swal'
 
-const isTray = new URLSearchParams(window.location.search).get('tray') === 'true'
 const store = useProjectStore()
 const showAddModal = ref(false)
 const currentView = ref<'dashboard' | 'projects'>('dashboard')
@@ -152,10 +150,7 @@ async function handleCreate() {
 </script>
 
 <template>
-  <div v-if="isTray" class="h-screen w-screen bg-transparent">
-     <TrayInterface />
-  </div>
-  <div v-else class="min-h-screen p-8 md:p-12 font-sans selection:bg-accent/30">
+  <div class="min-h-screen p-8 md:p-12 font-sans selection:bg-accent/30">
     <!-- Header -->
     <header class="flex flex-col md:flex-row justify-between items-end mb-16 max-w-7xl mx-auto gap-6 border-b border-border pb-6 animate-fade-in-up">
       <div class="flex items-center space-x-4 self-start md:self-auto group cursor-default">

@@ -41,9 +41,8 @@ def setup():
 def create_tray():
     # 優先使用生成的圖示
     icon_candidates = [
-        "src-tauri/icons/icon.ico",
-        "src-tauri/icons/32x32.png",
-        "src-tauri/icons/app-icon.png",
+        "assets/icons/icon.ico",
+        "assets/icons/app-icon.png",
         "frontend/public/vite.svg"
     ]
     
