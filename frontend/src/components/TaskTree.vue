@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Task } from '../stores/projectStore'
+import type { Task } from '../stores/projectStore'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 
