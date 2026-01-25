@@ -1,0 +1,13 @@
+D:\Dev\TaskMancer\src-tauri\target\debug\deps\jsonptr-e57901c94325511d.d: C:\Users\chen5\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\lib.rs C:\Users\chen5\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\assign.rs C:\Users\chen5\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\delete.rs C:\Users\chen5\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\resolve.rs C:\Users\chen5\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\pointer.rs C:\Users\chen5\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\token.rs C:\Users\chen5\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\index.rs C:\Users\chen5\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\component.rs C:\Users\chen5\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\../README.md
+
+D:\Dev\TaskMancer\src-tauri\target\debug\deps\libjsonptr-e57901c94325511d.rmeta: C:\Users\chen5\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\lib.rs C:\Users\chen5\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\assign.rs C:\Users\chen5\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\delete.rs C:\Users\chen5\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\resolve.rs C:\Users\chen5\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\pointer.rs C:\Users\chen5\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\token.rs C:\Users\chen5\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\index.rs C:\Users\chen5\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\component.rs C:\Users\chen5\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\../README.md
+
+C:\Users\chen5\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\lib.rs:
+C:\Users\chen5\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\assign.rs:
+C:\Users\chen5\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\delete.rs:
+C:\Users\chen5\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\resolve.rs:
+C:\Users\chen5\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\pointer.rs:
+C:\Users\chen5\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\token.rs:
+C:\Users\chen5\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\index.rs:
+C:\Users\chen5\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\component.rs:
+C:\Users\chen5\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\../README.md:

@@ -229,4 +229,11 @@
 ## v12.2.0 - DevOps Infrastructure (已完成)
 - [x] **StopTaskMancer.bat 升級**：實作遞迴進程樹終止邏輯與 ANSI 視覺化增強。
 
+## v13.0.0 - Desktop Integration (Tauri Tray) (已完成)
+- [x] **Tauri 2.0 基礎架構**：整合 Rust 後端與前端 Vue 構建。
+- [x] **系統托盤 (System Tray)**：實作 Windows 右下角托盤選單 (啟動、停止、開啟控制板)。
+- [x] **後端進程管理**：透過 Rust 控制 Python 後端生命週期。
+- [x] **簡易托盤介面**：實作 `TrayInterface.vue` 提供極簡控制面板。
+- [x] **智慧路由**：利用 URL 參數 (`?tray=true`) 實現托盤視窗專用介面。
+
 [Link]: https://github.com/Ericechen/TaskMancer

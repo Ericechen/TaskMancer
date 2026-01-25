@@ -1,58 +1,44 @@
 @echo off
+TITLE TaskMancer Service Stopper
 SETLOCAL EnableDelayedExpansion
 cd /d "%~dp0"
 
-:: 定義轉義字元以實現 ANSI 色彩
-for /F "tokens=1,2 delims=#" %%a in ('"prompt #$H#$E# & echo on & for %%b in (1) do rem"') do set "ESC=%%b"
-
-echo %ESC%[95m================================%ESC%[0m
-echo %ESC%[95m  TaskMancer Service Stopper    %ESC%[0m
-echo %ESC%[95m================================%ESC%[0m
+echo ================================
+echo   TaskMancer Service Stopper    
+echo ================================
 echo.
 
-:: 1. 從 config.md 讀取配置
-echo %ESC%[90m[1/3]%ESC%[0m 正在讀取配置...
-for /f "tokens=5" %%a in ('powershell -Command "Get-Content config.md -ErrorAction SilentlyContinue | Select-String 'Port : Frontend'"') do set TM_PORT_FRONTEND=%%a
-for /f "tokens=5" %%a in ('powershell -Command "Get-Content config.md -ErrorAction SilentlyContinue | Select-String 'Port : Backend'"') do set TM_PORT_BACKEND=%%a
+:: 1. Read configuration
+echo [1/3] Loading environment...
+if "%TM_PORT_BACKEND%"=="" set TM_PORT_BACKEND=8000
+if "%TM_PORT_FRONTEND%"=="" set TM_PORT_FRONTEND=5173
 
-:: 預設值
-if not defined TM_PORT_FRONTEND set TM_PORT_FRONTEND=5173
-if not defined TM_PORT_BACKEND set TM_PORT_BACKEND=8000
-
-echo     Frontend Port: %TM_PORT_FRONTEND%
 echo     Backend Port:  %TM_PORT_BACKEND%
+echo     Frontend Port: %TM_PORT_FRONTEND%
 echo.
 
-:: 2. 執行清理邏輯
-echo %ESC%[90m[2/3]%ESC%[0m 正在終止背景服務...
-powershell -Command ^
-    "$ports = @(%TM_PORT_BACKEND%, %TM_PORT_FRONTEND%); ^
-     $found = $false; ^
-     function Kill-Tree($pid) { ^
-         Get-CimInstance Win32_Process -Filter \"ParentProcessId=$pid\" | ForEach-Object { Kill-Tree $_.ProcessId }; ^
-         Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue; ^
-     } ^
-     foreach ($port in $ports) { ^
-         $conns = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue; ^
-         foreach ($c in $conns) { ^
-             $p = Get-Process -Id $c.OwningProcess -ErrorAction SilentlyContinue; ^
-             if ($p) { ^
-                 Write-Host \"  %ESC%[92m[MATCH]%ESC%[0m 發現 $port 埠口進程: $($p.Name) (PID: $($p.Id))\"; ^
-                 Kill-Tree $p.Id; ^
-                 $found = $true; ^
-             } ^
-         } ^
-     }; ^
-     if (-not $found) { Write-Host '  %ESC%[90m[INFO]%ESC%[0m 未偵測到運行中的服務' }"
+:: 2. Terminate Processes
+echo [2/3] Stopping background services (Killing Process Tree)...
 
-:: 3. 額外清理遺留標籤的視窗 (如果有的話)
+:: Fixed $pid conflict (renamed to $tPid)
+powershell -Command "$ports = @(%TM_PORT_BACKEND%, %TM_PORT_FRONTEND%); $found = $false; function Kill-Tree($tPid) { try { Get-CimInstance Win32_Process -Filter \"ParentProcessId=$tPid\" -ErrorAction SilentlyContinue | ForEach-Object { Kill-Tree $_.ProcessId }; Stop-Process -Id $tPid -Force -ErrorAction SilentlyContinue; } catch {} }; foreach ($port in $ports) { $conns = Get-NetTCPConnection -LocalPort $port -ErrorAction SilentlyContinue; foreach ($c in $conns) { if ($c.OwningProcess -ne 0) { $p = Get-Process -Id $c.OwningProcess -ErrorAction SilentlyContinue; if ($p) { Write-Host \"  [MATCH] Port $port Process: $($p.Name) (PID: $($p.Id))\"; Kill-Tree $p.Id; $found = $true; } } } }; $cmdProcs = Get-Process cmd -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -like '*TM - *' -or $_.MainWindowTitle -like '*TaskMancer*' }; foreach ($cp in $cmdProcs) { Write-Host \"  [CLEANUP] Closing window: $($cp.MainWindowTitle)\"; Kill-Tree $cp.Id; $found = $true; }; if (-not $found) { Write-Host '  [INFO] No active services found.' }"
+
+:: 3. Validation
 echo.
-echo %ESC%[90m[3/3]%ESC%[0m 正在進行最終清理...
-powershell -Command "Get-Process | Where-Object { $_.MainWindowTitle -like '*TM - Backend*' -or $_.MainWindowTitle -like '*TM - Frontend*' } | ForEach-Object { Stop-Process -Id $_.Id -Force; Write-Host \"  %ESC%[92m[OK]%ESC%[0m 已關閉殘留視窗: $($_.MainWindowTitle)\" }"
+echo [3/3] Validating status...
+netstat -ano | findstr ":%TM_PORT_BACKEND% :%TM_PORT_FRONTEND%" > nul
+if %errorlevel% equ 0 (
+    echo   [WARNING] Some ports are still active. Please check manually.
+) else (
+    echo   [SUCCESS] All targeted services have been stopped.
+)
 
 echo.
-echo %ESC%[95m================================%ESC%[0m
-echo %ESC%[92m  TaskMancer 已安全停止%ESC%[0m
-echo %ESC%[95m================================%ESC%[0m
+echo ================================
+echo     TaskMancer has Stopped      
+echo ================================
 echo.
-timeout /t 3
+
+:: Keep window open for review
+echo Press any key to close this window...
+pause
