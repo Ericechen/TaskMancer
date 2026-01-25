@@ -2,3 +2,5 @@ fastapi
 uvicorn
 watchdog
 websockets
+aiofiles
+psutil

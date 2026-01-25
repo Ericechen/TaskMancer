@@ -261,9 +261,8 @@ class ProjectManager:
                 return []
             
             scanner = DirectoryScanner(root)
-            # [v13.0] 效能優化：將 IO 密集的掃描操作放入 ThreadPool 執行，避免阻塞 Event Loop
-            loop = asyncio.get_running_loop()
-            projects_meta = await loop.run_in_executor(None, scanner.scan)
+            # [v13.1] 效能優化：使用新的非同步掃描方法，支援大批量處理和記憶體優化
+            projects_meta = await scanner.scan_async(batch_size=100)
             
             for meta in projects_meta:
                 try:
@@ -271,7 +270,8 @@ class ProjectManager:
                     path_obj = Path(project_path)
                     if not path_obj.exists(): continue
 
-                    parsed = parser.parse_file(meta['task_file'])
+                    # [v13.1] 使用非同步任務解析，支援大檔案處理
+                    parsed = await parser.parse_file_async(meta['task_file'])
                     
                     try:
                         all_files = os.listdir(path_obj)
@@ -397,7 +397,9 @@ class ProjectManager:
         found_meta = None
         for root in self.watched_roots:
             scanner = DirectoryScanner(root)
-            meta = next((m for m in scanner.scan() if self._normalize_path(m['path']) == self._normalize_path(abs_path)), None)
+            # [v13.1] 使用非同步掃描，但為單一專案優化使用小批次
+            projects_meta = await scanner.scan_async(batch_size=10)
+            meta = next((m for m in projects_meta if self._normalize_path(m['path']) == self._normalize_path(abs_path)), None)
             if meta:
                 found_meta = meta
                 break
@@ -405,7 +407,8 @@ class ProjectManager:
         if not found_meta: return None
         
         parser = TaskParser()
-        parsed = parser.parse_file(found_meta['task_file'])
+        # [v13.1] 使用非同步任務解析，支援大檔案處理
+        parsed = await parser.parse_file_async(found_meta['task_file'])
         path_obj = Path(abs_path)
         
         try:

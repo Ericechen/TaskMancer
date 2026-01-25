@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch, nextTick } from 'vue'
+import { debounce } from 'lodash-es'
 import { useProjectStore } from '../stores/projectStore'
 import ProjectCard from './ProjectCard.vue'
 import ProcessDashboard from './ProcessDashboard.vue'
 import MonitorTile from './MonitorTile.vue'
+import { RecycleScroller } from 'vue-virtual-scroller'
+import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
 
 const store = useProjectStore()
 
@@ -14,25 +17,67 @@ function getLatestLogs(path: string) {
 
 const layoutMode = computed(() => store.layoutMode)
 
-// [v11.0] Multi-criteria Filtering
-const filteredProjects = computed(() => {
-    let results = store.projects
+// [v13.1] 防抖搜尋和記憶化過濾，提升大量專案時的效能
+const searchQuery = ref(store.searchQuery)
+const selectedTag = ref(store.selectedTag)
+
+// 防抖搜尋更新
+const debouncedSearchUpdate = debounce((query: string) => {
+    store.searchQuery = query
+}, 300)
+
+// 監聽搜尋變化並應用防抖
+watch(searchQuery, (newQuery) => {
+    debouncedSearchUpdate(newQuery)
+})
+
+// 監聽標籤變化
+watch(selectedTag, (newTag) => {
+    store.selectedTag = newTag
+})
+
+// 記憶化過濾函數
+const memoizedFilter = (() => {
+    let cache = new Map()
     
-    // 1. Search Query
-    if (store.searchQuery) {
-        const query = store.searchQuery.toLowerCase()
-        results = results.filter(p => 
-            p.name.toLowerCase().includes(query) || 
-            p.path.toLowerCase().includes(query)
-        )
-    }
+    return (projects: any[], query: string, tag: string | null) => {
+        const cacheKey = `${projects.length}_${query}_${tag || 'none'}`
+        
+        if (cache.has(cacheKey)) {
+            return cache.get(cacheKey)
+        }
+        
+        let results = projects
+        
+        // 1. Search Query
+        if (query) {
+            const queryLower = query.toLowerCase()
+            results = results.filter(p => 
+                p.name.toLowerCase().includes(queryLower) || 
+                p.path.toLowerCase().includes(queryLower)
+            )
+        }
 
-    // 2. Tag Filter
-    if (store.selectedTag) {
-        results = results.filter(p => p.tags?.includes(store.selectedTag))
+        // 2. Tag Filter
+        if (tag) {
+            results = results.filter(p => p.tags?.includes(tag))
+        }
+        
+        cache.set(cacheKey, results)
+        
+        // 限制快取大小，避免記憶體洩漏
+        if (cache.size > 100) {
+            const firstKey = cache.keys().next().value
+            cache.delete(firstKey)
+        }
+        
+        return results
     }
+})()
 
-    return results
+// 使用記憶化過濾的計算屬性
+const filteredProjects = computed(() => {
+    return memoizedFilter(store.projects, store.searchQuery, store.selectedTag)
 })
 
 // [v11.0] Tag Aggregation
@@ -116,9 +161,19 @@ const totalMonitorStats = computed(() => store.globalMetrics)
                   <div v-if="activeProjects.length === 0" class="py-12 border border-dashed border-border rounded-xl flex flex-col items-center justify-center text-secondary">
                       <p class="font-mono text-sm opacity-75">No active projects. Start something!</p>
                   </div>
-                  <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      <ProjectCard v-for="p in activeProjects" :key="p.path" :project="p" />
-                  </div>
+                   <div v-else class="virtual-scroller-container">
+                       <RecycleScroller
+                           class="scroller"
+                           :items="activeProjects"
+                           :item-size="280"
+                           key-field="path"
+                           v-slot="{ item }"
+                       >
+                           <div class="p-2">
+                               <ProjectCard :project="item" />
+                           </div>
+                       </RecycleScroller>
+                   </div>
               </section>
 
               <!-- Section 2: Drafts (Not Started) -->
@@ -128,9 +183,19 @@ const totalMonitorStats = computed(() => store.globalMetrics)
                       <div class="h-[1px] flex-1 bg-border/50"></div>
                       <span class="text-xs font-mono text-secondary px-2 py-1 bg-surface border border-border rounded">{{ draftProjects.length }}</span>
                   </div>
-                  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      <ProjectCard v-for="p in draftProjects" :key="p.path" :project="p" />
-                  </div>
+                   <div class="virtual-scroller-container">
+                       <RecycleScroller
+                           class="scroller"
+                           :items="draftProjects"
+                           :item-size="280"
+                           key-field="path"
+                           v-slot="{ item }"
+                       >
+                           <div class="p-2">
+                               <ProjectCard :project="item" />
+                           </div>
+                       </RecycleScroller>
+                   </div>
               </section>
               
               <!-- Section 3: Completed -->
@@ -140,16 +205,36 @@ const totalMonitorStats = computed(() => store.globalMetrics)
                       <div class="h-[1px] flex-1 bg-success/30"></div>
                       <span class="text-xs font-mono text-success px-2 py-1 bg-success/5 border border-success/20 rounded">{{ completedProjects.length }}</span>
                   </div>
-                  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      <ProjectCard v-for="p in completedProjects" :key="p.path" :project="p" />
-                  </div>
+                   <div class="virtual-scroller-container">
+                       <RecycleScroller
+                           class="scroller"
+                           :items="completedProjects"
+                           :item-size="280"
+                           key-field="path"
+                           v-slot="{ item }"
+                       >
+                           <div class="p-2">
+                               <ProjectCard :project="item" />
+                           </div>
+                       </RecycleScroller>
+                   </div>
               </section>
           </div>
 
-          <!-- LAYOUT: Pure Responsive Grid -->
-          <div v-else-if="layoutMode === 'grid'" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              <ProjectCard v-for="p in filteredProjects" :key="p.path" :project="p" />
-          </div>
+           <!-- LAYOUT: Pure Responsive Grid -->
+           <div v-else-if="layoutMode === 'grid'" class="virtual-scroller-container">
+               <RecycleScroller
+                   class="scroller grid-scroller"
+                   :items="filteredProjects"
+                   :item-size="280"
+                   key-field="path"
+                   v-slot="{ item }"
+               >
+                   <div class="p-2">
+                       <ProjectCard :project="item" />
+                   </div>
+               </RecycleScroller>
+           </div>
 
           <!-- LAYOUT: Monitor Matrix (v11.1 - Horizontal Row Mode) -->
           <div v-else-if="layoutMode === 'monitor'" class="space-y-8 min-h-[60vh]">
@@ -205,3 +290,76 @@ const totalMonitorStats = computed(() => store.globalMetrics)
       </div>
   </div>
 </template>
+
+<style scoped>
+/* [v13.1] 虛擬滾動容器樣式 */
+.virtual-scroller-container {
+  @apply w-full h-full;
+  min-height: 400px;
+}
+
+.scroller {
+  @apply h-full;
+  max-height: 70vh;
+}
+
+.grid-scroller {
+  /* 網格模式需要特殊處理以保持多列佈局 */
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+/* 虛擬滾動項目容器 */
+.virtual-scroller-container :deep(.vue-recycle-scroller__item-wrapper) {
+  @apply box-border;
+}
+
+.virtual-scroller-container :deep(.vue-recycle-scroller__item-view) {
+  @apply box-border;
+}
+
+/* 確保項目在虛擬滾動中正確顯示 */
+.virtual-scroller-container :deep(.vue-recycle-scroller__item) {
+  @apply w-full;
+}
+
+/* 載入狀態 */
+.virtual-scroller-container :deep(.vue-recycle-scroller__item-placeholder) {
+  @apply bg-surface/10 border border-dashed border-border rounded-lg;
+  height: 280px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 滾動條樣式 */
+.scroller::-webkit-scrollbar {
+  @apply w-2;
+}
+
+.scroller::-webkit-scrollbar-track {
+  @apply bg-surface/10;
+}
+
+.scroller::-webkit-scrollbar-thumb {
+  @apply bg-accent/30 rounded-full;
+}
+
+.scroller::-webkit-scrollbar-thumb:hover {
+  @apply bg-accent/50;
+}
+
+/* 響應式調整 */
+@media (max-width: 768px) {
+  .scroller {
+    max-height: 60vh;
+  }
+  
+  .grid-scroller {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
