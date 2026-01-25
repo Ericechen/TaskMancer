@@ -147,8 +147,9 @@ class DatabaseManager:
                 conn = self._get_conn()
                 conn.execute("DELETE FROM metrics WHERE timestamp < ?", (cutoff,))
                 conn.execute("DELETE FROM logs WHERE timestamp < ?", (cutoff,))
-                conn.execute("VACUUM")
                 conn.commit()
+                # VACUUM 需要在事務外執行
+                conn.execute("VACUUM")
             logger.info("Database maintenance: Old data purged.")
         except Exception as e:
             logger.error(f"DB Cleanup Error: {e}")

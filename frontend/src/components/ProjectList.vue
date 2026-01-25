@@ -1,12 +1,10 @@
 <script setup lang="ts">
-import { computed, ref, watch, nextTick } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { debounce } from 'lodash-es'
 import { useProjectStore } from '../stores/projectStore'
 import ProjectCard from './ProjectCard.vue'
 import ProcessDashboard from './ProcessDashboard.vue'
 import MonitorTile from './MonitorTile.vue'
-import { RecycleScroller } from 'vue-virtual-scroller'
-import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
 
 const store = useProjectStore()
 
@@ -161,18 +159,8 @@ const totalMonitorStats = computed(() => store.globalMetrics)
                   <div v-if="activeProjects.length === 0" class="py-12 border border-dashed border-border rounded-xl flex flex-col items-center justify-center text-secondary">
                       <p class="font-mono text-sm opacity-75">No active projects. Start something!</p>
                   </div>
-                   <div v-else class="virtual-scroller-container">
-                       <RecycleScroller
-                           class="scroller"
-                           :items="activeProjects"
-                           :item-size="280"
-                           key-field="path"
-                           v-slot="{ item }"
-                       >
-                           <div class="p-2">
-                               <ProjectCard :project="item" />
-                           </div>
-                       </RecycleScroller>
+                   <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                       <ProjectCard v-for="p in activeProjects" :key="p.path" :project="p" />
                    </div>
               </section>
 
@@ -183,18 +171,8 @@ const totalMonitorStats = computed(() => store.globalMetrics)
                       <div class="h-[1px] flex-1 bg-border/50"></div>
                       <span class="text-xs font-mono text-secondary px-2 py-1 bg-surface border border-border rounded">{{ draftProjects.length }}</span>
                   </div>
-                   <div class="virtual-scroller-container">
-                       <RecycleScroller
-                           class="scroller"
-                           :items="draftProjects"
-                           :item-size="280"
-                           key-field="path"
-                           v-slot="{ item }"
-                       >
-                           <div class="p-2">
-                               <ProjectCard :project="item" />
-                           </div>
-                       </RecycleScroller>
+                   <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                       <ProjectCard v-for="p in draftProjects" :key="p.path" :project="p" />
                    </div>
               </section>
               
@@ -205,35 +183,15 @@ const totalMonitorStats = computed(() => store.globalMetrics)
                       <div class="h-[1px] flex-1 bg-success/30"></div>
                       <span class="text-xs font-mono text-success px-2 py-1 bg-success/5 border border-success/20 rounded">{{ completedProjects.length }}</span>
                   </div>
-                   <div class="virtual-scroller-container">
-                       <RecycleScroller
-                           class="scroller"
-                           :items="completedProjects"
-                           :item-size="280"
-                           key-field="path"
-                           v-slot="{ item }"
-                       >
-                           <div class="p-2">
-                               <ProjectCard :project="item" />
-                           </div>
-                       </RecycleScroller>
+                   <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                       <ProjectCard v-for="p in completedProjects" :key="p.path" :project="p" />
                    </div>
               </section>
           </div>
 
            <!-- LAYOUT: Pure Responsive Grid -->
-           <div v-else-if="layoutMode === 'grid'" class="virtual-scroller-container">
-               <RecycleScroller
-                   class="scroller grid-scroller"
-                   :items="filteredProjects"
-                   :item-size="280"
-                   key-field="path"
-                   v-slot="{ item }"
-               >
-                   <div class="p-2">
-                       <ProjectCard :project="item" />
-                   </div>
-               </RecycleScroller>
+           <div v-else-if="layoutMode === 'grid'" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+               <ProjectCard v-for="p in filteredProjects" :key="p.path" :project="p" />
            </div>
 
           <!-- LAYOUT: Monitor Matrix (v11.1 - Horizontal Row Mode) -->
@@ -290,76 +248,3 @@ const totalMonitorStats = computed(() => store.globalMetrics)
       </div>
   </div>
 </template>
-
-<style scoped>
-/* [v13.1] 虛擬滾動容器樣式 */
-.virtual-scroller-container {
-  @apply w-full h-full;
-  min-height: 400px;
-}
-
-.scroller {
-  @apply h-full;
-  max-height: 70vh;
-}
-
-.grid-scroller {
-  /* 網格模式需要特殊處理以保持多列佈局 */
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 1.5rem;
-  max-height: 70vh;
-  overflow-y: auto;
-}
-
-/* 虛擬滾動項目容器 */
-.virtual-scroller-container :deep(.vue-recycle-scroller__item-wrapper) {
-  @apply box-border;
-}
-
-.virtual-scroller-container :deep(.vue-recycle-scroller__item-view) {
-  @apply box-border;
-}
-
-/* 確保項目在虛擬滾動中正確顯示 */
-.virtual-scroller-container :deep(.vue-recycle-scroller__item) {
-  @apply w-full;
-}
-
-/* 載入狀態 */
-.virtual-scroller-container :deep(.vue-recycle-scroller__item-placeholder) {
-  @apply bg-surface/10 border border-dashed border-border rounded-lg;
-  height: 280px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* 滾動條樣式 */
-.scroller::-webkit-scrollbar {
-  @apply w-2;
-}
-
-.scroller::-webkit-scrollbar-track {
-  @apply bg-surface/10;
-}
-
-.scroller::-webkit-scrollbar-thumb {
-  @apply bg-accent/30 rounded-full;
-}
-
-.scroller::-webkit-scrollbar-thumb:hover {
-  @apply bg-accent/50;
-}
-
-/* 響應式調整 */
-@media (max-width: 768px) {
-  .scroller {
-    max-height: 60vh;
-  }
-  
-  .grid-scroller {
-    grid-template-columns: 1fr;
-  }
-}
-</style>
