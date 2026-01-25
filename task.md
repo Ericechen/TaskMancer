@@ -226,4 +226,7 @@
 - [x] **邏輯抽離**：將核心操作邏輯抽離至 `useProjectActions` Composable。
 - [x] **交互增強**：優化依賴項與連結的 UI 互動與智能標籤顯示。
 
+## v12.2.0 - DevOps Infrastructure (已完成)
+- [x] **StopTaskMancer.bat 升級**：實作遞迴進程樹終止邏輯與 ANSI 視覺化增強。
+
 [Link]: https://github.com/Ericechen/TaskMancer

@@ -73,3 +73,6 @@
 - [x] Delta Updates 協議：極緻 WebSocket 效能優化。
 - [x] 日誌渲染虛擬化：解決高頻日誌下的 DOM 壓力問題。
 - [x] 智能警報：偵測資源異常佔用並觸發視覺反饋。
+
+## v12.2 - DevOps Infrastructure (已完成)
+- [x] 升級 `StopTaskMancer.bat`：確保背景服務能徹底清理不殘留。
