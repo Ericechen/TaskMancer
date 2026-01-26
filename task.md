@@ -257,4 +257,8 @@
 - [x] **Process Supervision**: 導入 Windows `taskkill /F /T` 強制終結機制，確保 `test_log_stream` 等 Batch 服務不會殘留殭屍進程。
 - [x] **Start Tracing**: 新增 `start_project` 觸發來源日誌 (`trigger=manual/dep`)，便於追蹤自動重啟原因。
 
+## v13.12.0 - UX Hardening (已完成)
+- [x] **Ghost Click Prevention**: 在前端 `toggleDev` 增加 1 秒冷卻機制 (Debounce)，防止雙擊或快速點擊導致的重複啟動請求。
+- [x] **Cleanup**: 移除所有臨時調試日誌。
+
 [Link]: https://github.com/Ericechen/TaskMancer

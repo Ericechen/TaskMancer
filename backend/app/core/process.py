@@ -177,7 +177,11 @@ class RunningProcess:
                 logger.error(f"Error reading logs for {self.name}: {e}")
                 break
         
-        self.is_running = False
+        # [v13.11] Nuclear Safety: If log reader stops, process MUST stop.
+        # This prevents "Zombie" processes where backend loses track but process stays alive.
+        logger.info(f"Log stream ended for {self.name}. Terminating process tree...")
+        self.stop() 
+        
         await self.connection_manager.broadcast({
             "type": "log_status",
             "project": self.name,
@@ -192,10 +196,26 @@ class RunningProcess:
         if self.process:
             pid = self.process.pid
             try:
-                # [v13.?) Force Kill for Windows to prevent Zombies
+                # [Debug] Log Stop Attempt
+                try:
+                    with open("process_debug.log", "a", encoding="utf-8") as f:
+                        import datetime
+                        f.write(f"[{datetime.datetime.now()}] STOP REQUEST: {self.name} (PID: {pid})\n")
+                except: pass
+
+                # [v13.?] Force Kill for Windows to prevent Zombies
                 if os.name == 'nt':
                      import subprocess
-                     subprocess.run(f"taskkill /F /T /PID {pid}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                     # Add capture_output to see errors
+                     res = subprocess.run(f"taskkill /F /T /PID {pid}", shell=True, capture_output=True, text=True)
+                     
+                     # [Debug] Log Kill Result
+                     try:
+                        with open("process_debug.log", "a", encoding="utf-8") as f:
+                            f.write(f"  -> Taskkill Return: {res.returncode}\n")
+                            f.write(f"  -> Stdout: {res.stdout.strip()}\n")
+                            f.write(f"  -> Stderr: {res.stderr.strip()}\n")
+                     except: pass
                 else:
                     # Unix-like cleanup
                     parent = psutil.Process(pid)
@@ -203,7 +223,16 @@ class RunningProcess:
                         child.kill()
                     parent.kill()
             except (psutil.NoSuchProcess, psutil.AccessDenied):
+                 # [Debug] Log Already Dead
+                try:
+                    with open("process_debug.log", "a", encoding="utf-8") as f:
+                        f.write(f"  -> Process already dead (NoSuchProcess/AccessDenied)\n")
+                except: pass
                 pass
             except Exception as e:
                 logger.error(f"Stop process {self.name} failed: {e}")
+                try:
+                    with open("process_debug.log", "a", encoding="utf-8") as f:
+                        f.write(f"  -> EXCEPTION: {e}\n")
+                except: pass
             self.is_running = False

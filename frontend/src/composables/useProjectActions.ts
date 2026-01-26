@@ -83,7 +83,15 @@ export function useProjectActions() {
         }
     }
 
+    // [v13.12] Action Cooldown to prevent ghost clicks / rapid toggling
+    const actionCooldown = ref(false)
+
     async function toggleDev(project: Project) {
+        if (actionCooldown.value) return
+        
+        actionCooldown.value = true
+        setTimeout(() => actionCooldown.value = false, 1000)
+
         const isRunning = project.process?.is_running;
         if (isRunning) {
             const result = await Swal.fire({

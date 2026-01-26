@@ -321,6 +321,14 @@ class ProjectManager:
 
     async def start_project(self, target_path: Path, trigger: str = "manual"):
         n_path = self._normalize_path(str(target_path))
+        
+        # [Debug] Trace Log
+        try:
+            with open("start_triggers.log", "a", encoding="utf-8") as f:
+                import datetime
+                f.write(f"[{datetime.datetime.now()}] START REQUEST: {n_path} | Trigger: {trigger}\n")
+        except: pass
+
         logger.info(f"REQUEST START: {n_path} (Trigger: {trigger})")
 
         if n_path == self.self_path: return

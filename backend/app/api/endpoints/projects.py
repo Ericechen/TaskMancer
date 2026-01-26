@@ -68,6 +68,13 @@ async def run_project_action(request: CommandRequest):
     """
     manager = get_project_manager()
     try:
+        # [Debug] Trace Log
+        try:
+            with open("api_requests.log", "a", encoding="utf-8") as f:
+                import datetime
+                f.write(f"[{datetime.datetime.now()}] ACTION: {request.action} | Path: {request.path}\n")
+        except: pass
+
         path = Path(request.path)
         if not path.exists() or not path.is_dir():
             raise HTTPException(status_code=400, detail="Invalid project path")
