@@ -155,16 +155,22 @@ export const useProjectStore = defineStore('project', () => {
             const existing = projects.value[index]
             if (!existing) return
             
-            const process = existing.process || { is_running: false, stats: null, has_error: false }
-            process.is_running = data.status === 'started' || data.status === 'running'
-            
             if (data.status === 'stopped') {
-                process.is_running = false
-                process.stats = null
-                process.history = undefined
+                // [v13.7] Hard reset the process object via replacement
+                projects.value[index] = {
+                    ...existing,
+                    process: {
+                        is_running: false,
+                        stats: null,
+                        history: undefined,
+                        has_error: false
+                    }
+                } as any
+            } else {
+                const process = existing.process || { is_running: false, stats: null, has_error: false }
+                process.is_running = data.status === 'started' || data.status === 'running'
+                projects.value[index] = { ...existing, process } as any
             }
-            
-            projects.value[index] = { ...existing, process } as any
           }
       } else if (data.type === 'process_stats') {
         const path = data.path?.toLowerCase().replace(/\\/g, '/')

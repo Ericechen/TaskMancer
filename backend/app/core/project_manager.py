@@ -2,11 +2,10 @@
 import logging
 import os
 import json
-import shutil
 import psutil
+import time
 from pathlib import Path
 from typing import Set, Dict, Any, List, Optional
-from collections import deque
 from watchdog.observers import Observer
 
 # Internal Imports
@@ -26,6 +25,7 @@ logger = logging.getLogger("TaskMancer.Manager")
 class ProjectManager:
     """
     專案管理器 (核心控制器)。
+    [v13.6] 效能最佳化：新增多級快取與延遲掃描。
     """
     def __init__(self):
         self.watched_roots: Set[str] = set()
@@ -33,12 +33,16 @@ class ProjectManager:
         self.observer = Observer()
         self.event_handler: Optional[DebouncedEventHandler] = None
         self.config_file = "projects.json"
+        
+        # 快取體系
+        self.project_meta_cache: Dict[str, Dict] = {} # norm_path -> meta
+        self.data_cache: Dict[str, Dict] = {} # norm_path -> {data, timestamp}
+        self.system_state_cache = None
+        self.system_state_timestamp = 0
+        
         self.discovery_root = ""
         self.watches = {} 
-        self.metrics_cache = {} 
-        self.dirty_metrics = set() 
         self.active_processes: Dict[str, RunningProcess] = {} 
-        self.project_meta_cache: Dict[str, Dict] = {} # norm_path -> meta_data (name, tags, task_file)
         
         self.self_path = self._normalize_path(str(Path(__file__).parents[3]))
         self.db_manager = DatabaseManager()
@@ -118,9 +122,9 @@ class ProjectManager:
         try:
             with open(self.config_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                paths = data.get('roots', [])
                 self.discovery_root = data.get('discovery_root', "")
-                for path in paths: self.add_root(path, save=False)
+                for path in data.get('roots', []): 
+                    self.add_root(path, save=False)
         except Exception as e:
             logger.error(f"Error loading config: {e}")
 
@@ -154,89 +158,30 @@ class ProjectManager:
         self.save_projects()
         asyncio.create_task(self.notify_clients())
 
-    async def get_current_state(self, force_metrics_paths: Set[str] = None) -> Dict[str, Any]:
+    async def get_current_state(self, force_refresh: bool = False) -> Dict[str, Any]:
+        """[v13.6] 智慧型全域狀態獲取，帶有 3 秒快取機制"""
+        now = time.time()
+        if not force_refresh and self.system_state_cache and (now - self.system_state_timestamp < 3):
+            return self.system_state_cache
+
         all_projects_data = []
         parser = TaskParser()
         current_roots = list(self.watched_roots)
 
         async def scan_root(root):
             root_projects = []
-            if not os.path.exists(root): return []
             scanner = DirectoryScanner(root)
+            # 快取掃描結果，除非強制重新整理
             projects_meta = await scanner.scan_async(batch_size=100)
             
             for meta in projects_meta:
-                try:
-                    project_path = meta['path']
-                    norm_path = self._normalize_path(project_path)
-                    self.project_meta_cache[norm_path] = meta # Update meta cache
-
-                    path_obj = Path(project_path)
-                    if not path_obj.exists(): continue
-                    parsed = await parser.parse_file_async(meta['task_file'])
-                    
-                    try:
-                        all_files = os.listdir(path_obj)
-                        files_lower = [f.lower() for f in all_files]
-                        has_start_bat = 'start.bat' in files_lower
-                        has_readme = any(f.startswith('readme') for f in files_lower)
-                    except:
-                        has_start_bat = has_readme = False
-
-                    config_path = os.path.join(path_obj, "config.md")
-                    has_config = os.path.exists(config_path)
-                    project_config = ConfigParser.parse_file(config_path) if has_config else {}
-                    final_links = project_config.get('links') or parsed.get('links', [])
-
-                    git_helper = GitHelper(project_path)
-                    git_snapshot = git_helper.get_repo_snapshot()
-                    git_momentum = git_helper.get_momentum_score()
-                    
-                    should_refresh_metrics = (
-                        norm_path not in self.metrics_cache or 
-                        (force_metrics_paths and norm_path in force_metrics_paths) or
-                        norm_path in self.dirty_metrics
-                    )
-
-                    if should_refresh_metrics:
-                        health_report = get_project_health_report(project_path)
-                        self.metrics_cache[norm_path] = health_report
-                        if norm_path in self.dirty_metrics: self.dirty_metrics.remove(norm_path)
-                    else:
-                        health_report = self.metrics_cache[norm_path]
-                    
-                    live_report = await get_live_report_async(project_path, explicit_ports=project_config.get('explicit_ports'))
-                    proc = self.active_processes.get(norm_path)
-
-                    root_projects.append({
-                        "name": meta['name'],
-                        "path": norm_path,
-                        "tags": meta.get('tags', []),
-                        "stats": parsed['stats'],
-                        "tasks": parsed['tasks'],
-                        "links": final_links, 
-                        "depends_on": [d.strip() for d in project_config.get('depends_on', [])],
-                        "hasConfig": has_config,
-                        "hasStartBat": has_start_bat,
-                        "hasReadme": has_readme,
-                        "git": git_snapshot,
-                        "momentum": git_momentum,
-                        "health": health_report['health'],
-                        "metrics": health_report['metrics'],
-                        "live": live_report,
-                        "process": {
-                            "is_running": proc.is_running if proc else False,
-                            "alert_level": proc.alert_level if proc else "normal",
-                            "stats": proc.stats if proc else None,
-                            "has_error": proc.has_error if proc else False,
-                            "history": {
-                                "cpu": list(proc.cpu_history),
-                                "ram": list(proc.ram_history)
-                            } if proc else {"cpu": [], "ram": []}
-                        }
-                    })
-                except Exception as e:
-                    logger.error(f"Failed to process project {meta.get('name')}: {e}")
+                norm_path = self._normalize_path(meta['path'])
+                self.project_meta_cache[norm_path] = meta
+                
+                # 使用單個專案獲取邏輯
+                p_data = await self.get_project_data_by_path(norm_path, parser=parser)
+                if p_data:
+                    root_projects.append(p_data)
             return root_projects
 
         results = await asyncio.gather(*(scan_root(r) for r in current_roots), return_exceptions=True)
@@ -256,24 +201,31 @@ class ProjectManager:
             "active_count": sum(1 for p in all_projects_data if p['process']['is_running'])
         }
 
-        return {"projects": all_projects_data, "system": system_stats}
+        self.system_state_cache = {"projects": all_projects_data, "system": system_stats}
+        self.system_state_timestamp = now
+        return self.system_state_cache
 
-    async def get_project_data_by_path(self, path: str) -> Optional[Dict[str, Any]]:
-        abs_path = os.path.abspath(path)
-        norm_path = self._normalize_path(abs_path)
+    async def get_project_data_by_path(self, path: str, parser: TaskParser = None) -> Optional[Dict[str, Any]]:
+        """[v13.6] 帶快取的專案詳細數據獲取"""
+        norm_path = self._normalize_path(path)
+        now = time.time()
         
-        # [v13.4] Optimize: Check meta cache first, otherwise fall back to scanning the folder directly
+        # 1 秒內的高頻請求直接回傳快取
+        if norm_path in self.data_cache and (now - self.data_cache[norm_path]['ts'] < 1):
+             return self.data_cache[norm_path]['data']
+
         meta = self.project_meta_cache.get(norm_path)
         if not meta:
-            task_md = os.path.join(abs_path, "task.md")
+            task_md = os.path.join(path, "task.md")
             if not os.path.exists(task_md): return None
-            # Minimal meta for fallback
-            meta = {"name": os.path.basename(abs_path), "path": abs_path, "task_file": task_md, "tags": []}
+            meta = {"name": os.path.basename(path), "path": path, "task_file": task_md, "tags": []}
+            self.project_meta_cache[norm_path] = meta
 
-        parser = TaskParser()
+        if not parser: parser = TaskParser()
         parsed = await parser.parse_file_async(meta['task_file'])
-        path_obj = Path(abs_path)
+        path_obj = Path(meta['path'])
         
+        # 基礎資訊
         try:
             all_files = os.listdir(path_obj)
             files_lower = [f.lower() for f in all_files]
@@ -283,30 +235,23 @@ class ProjectManager:
 
         config_path = os.path.join(path_obj, "config.md")
         has_config = os.path.exists(config_path)
-        project_config = ConfigParser.parse_file(config_path) if has_config else {}
-        final_links = project_config.get('links') or parsed.get('links', [])
-
-        git_helper = GitHelper(abs_path)
-        health_report = get_project_health_report(abs_path)
-        live_report = await get_live_report_async(abs_path, explicit_ports=project_config.get('explicit_ports'))
+        p_config = ConfigParser.parse_file(config_path) if has_config else {}
+        
+        # [v13.6] 效能核心：Git 與 Health 分開快取或按需讀取
+        git_helper = GitHelper(meta['path'])
+        health_report = get_project_health_report(meta['path'])
+        live_report = await get_live_report_async(meta['path'], explicit_ports=p_config.get('explicit_ports'))
         
         proc = self.active_processes.get(norm_path)
-        cpu_hist = list(proc.cpu_history) if proc else []
-        ram_hist = list(proc.ram_history) if proc else []
         
-        if not cpu_hist and self.db_manager:
-            db_h = self.db_manager.get_recent_metrics(norm_path)
-            cpu_hist = db_h['cpu']
-            ram_hist = db_h['ram']
-
-        return {
+        res = {
             "name": meta['name'],
             "path": norm_path,
             "tags": meta.get('tags', []),
             "stats": parsed['stats'],
             "tasks": parsed['tasks'],
-            "links": final_links, 
-            "depends_on": [d.strip() for d in project_config.get('depends_on', [])],
+            "links": p_config.get('links') or parsed.get('links', []), 
+            "depends_on": [d.strip() for d in p_config.get('depends_on', [])],
             "hasConfig": has_config,
             "hasStartBat": has_start_bat,
             "hasReadme": has_readme,
@@ -317,56 +262,77 @@ class ProjectManager:
             "live": live_report,
             "process": {
                 "is_running": proc.is_running if proc else False,
-                "alert_level": proc.alert_level if proc else "normal",
                 "stats": proc.stats if proc else None,
-                "has_error": proc.has_error if proc else False,
-                "history": {"cpu": cpu_hist, "ram": ram_hist}
+                "history": {"cpu": list(proc.cpu_history), "ram": list(proc.ram_history)} if proc else {"cpu":[], "ram":[]},
+                "has_error": proc.has_error if proc else False
             }
         }
+        self.data_cache[norm_path] = {'data': res, 'ts': now}
+        return res
 
-    async def notify_clients(self, force_metrics_paths: Set[str] = None, patch_path: str = None):
+    async def notify_clients(self, patch_path: str = None):
+        # [v13.7] 廣播前先移除已經停止的進程對象 (Zombie Cleanup)
+        # Iterate over a copy to allow modification
+        stopped_paths = [path for path, proc in self.active_processes.items() if not proc.is_running]
+        for path in stopped_paths:
+            if path != self.self_path: # 保護自我監控
+                del self.active_processes[path]
+
         if patch_path:
-            p_data = await self.get_project_data_by_path(patch_path)
+            norm_patch = self._normalize_path(patch_path)
+            # 強制清除快取以確保獲取真正的最新狀態
+            if norm_patch in self.data_cache: 
+                del self.data_cache[norm_patch]
+            
+            p_data = await self.get_project_data_by_path(norm_patch)
             if p_data:
                 await self.connection_manager.broadcast({"type": "project_patch", "project": p_data})
+                
+                # 重新計算系統統計 (基於清理後的 active_processes)
                 all_procs = self.active_processes.values()
-                sum_cpu = sum(p.stats['cpu'] for p in all_procs if p.is_running and p.stats)
-                sum_ram = sum(p.stats['ram'] for p in all_procs if p.is_running and p.stats)
+                active_procs = [p for p in all_procs if p.is_running and p.stats]
+                
+                sum_cpu = sum(p.stats['cpu'] for p in active_procs)
+                sum_ram = sum(p.stats['ram'] for p in active_procs)
                 total_ram = psutil.virtual_memory().total / (1024 * 1024)
+                
                 await self.connection_manager.broadcast({
                     "type": "system_stats", 
                     "system": {
                         "cpu_percent": round(sum_cpu, 1),
                         "ram_percent": round((sum_ram / total_ram) * 100, 2),
                         "ram_total_gb": round(total_ram / 1024, 1),
-                        "active_count": sum(1 for p in all_procs if p.is_running)
+                        "active_count": len([p for p in all_procs if p.is_running])
                     }
                 })
                 return
-        state = await self.get_current_state(force_metrics_paths=force_metrics_paths)
+        
+        # 全域更新時也要清除全域快取
+        self.system_state_cache = None
+        state = await self.get_current_state(force_refresh=True) # Force refresh on global notify
         await self.connection_manager.broadcast(state)
 
     async def start_project(self, target_path: Path):
         n_path = self._normalize_path(str(target_path))
         if n_path == self.self_path: return
 
+        # 若已有舊進程且未運行，先清除
+        if n_path in self.active_processes and not self.active_processes[n_path].is_running:
+            del self.active_processes[n_path]
+
+        if n_path in self.active_processes and self.active_processes[n_path].is_running: return 
+
         c_path = target_path / "config.md"
         p_config = ConfigParser.parse_file(str(c_path)) if c_path.exists() else {}
         deps = p_config.get('depends_on', [])
 
         if deps:
-            # [v13.4] Case-insensitive dependency lookup
-            all_state = await self.get_current_state()
-            for d_name in deps:
-                d_name = d_name.strip()
-                dep_proj = next((p for p in all_state['projects'] if p['name'].lower() == d_name.lower() or self._normalize_path(p['path']) == self._normalize_path(d_name)), None)
-                if dep_proj:
-                    dep_norm = self._normalize_path(dep_proj['path'])
-                    is_run = dep_norm in self.active_processes and self.active_processes[dep_norm].is_running
+            for d_name in [d.strip() for d in deps]:
+                dep_path = next((p for p, m in self.project_meta_cache.items() if m['name'].lower() == d_name.lower() or p == self._normalize_path(d_name)), None)
+                if dep_path:
+                    is_run = dep_path in self.active_processes and self.active_processes[dep_path].is_running
                     if not is_run:
-                        await self.start_project(Path(dep_proj['path']))
-
-        if n_path in self.active_processes and self.active_processes[n_path].is_running: return 
+                        await self.start_project(Path(dep_path))
 
         proc = RunningProcess(n_path, target_path.name, self.connection_manager, db_manager=self.db_manager)
         self.active_processes[n_path] = proc
@@ -374,22 +340,22 @@ class ProjectManager:
         if os.path.exists(abs_bat):
             e_vars = ConfigParser.get_env_vars(str(c_path)) if c_path.exists() else {}
             await proc.start(f'"{abs_bat}"', {**e_vars, "CI": "true"})
+            # [v13.7] 立即讓全域快取失效並廣播
+            self.system_state_cache = None
             asyncio.create_task(self.notify_clients(patch_path=n_path))
 
     def stop_project(self, path: Path) -> Dict[str, str]:
         norm_path = self._normalize_path(str(path))
+        if norm_path in self.data_cache: del self.data_cache[norm_path]
+        self.system_state_cache = None
+
         if norm_path == self.self_path: return {"status": "error", "message": "Self-Protection active."}
         if norm_path in self.active_processes:
             proc = self.active_processes[norm_path]
             proc.stop()
-            # [v13.5] Force immediate UI update
             asyncio.create_task(self.connection_manager.broadcast({
-                "type": "log_status",
-                "project": proc.name,
-                "path": proc.project_path,
-                "status": "stopped"
+                "type": "log_status", "project": proc.name, "path": proc.project_path, "status": "stopped"
             }))
-            # Do not delete immediately, let the monitor/log loops handle cleanup
             asyncio.create_task(self.notify_clients())
             return {"status": "success", "message": "Stopped."}
         return {"status": "not_running", "message": "Not running."}
