@@ -269,4 +269,8 @@
 - [x] **Strict State Lock**: 重構 `ProjectManager`，在 `start_project` 導入強制鎖 (`stopping` 狀態下禁止啟動)，防止競爭條件導致的重啟迴圈。
 - [x] **Safe Dependency Logic**: 遞迴檢查依賴項狀態，若依賴項正在停止與卸載，則跳過自動啟動。
 
+## v13.15.0 - Serialized State Management (已完成)
+- [x] **Project Mutex**: 引入 `asyncio.Lock` 為每個專案建立獨立互斥鎖，強制序列化 start/stop 操作。
+- [x] **Race Condition Fix**: 徹底防止「停止中途插入啟動」的競爭狀態，解決了快速切換時導致的 Action Failed 或殭屍進程重啟問題。
+
 [Link]: https://github.com/Ericechen/TaskMancer
