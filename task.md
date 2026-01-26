@@ -253,4 +253,8 @@
 - [x] **Service Reliability**: 修正 `dummy_service` 的 Ping 模擬邏輯，使其支援無限期運行 (`-n 99999`)。
 - [x] **State Integrity**: 徹底消除因 Watcher 報錯導致的後端狀態不一致問題。
 
+## v13.10.0 - Nuclear Termination (已完成)
+- [x] **Process Supervision**: 導入 Windows `taskkill /F /T` 強制終結機制，確保 `test_log_stream` 等 Batch 服務不會殘留殭屍進程。
+- [x] **Start Tracing**: 新增 `start_project` 觸發來源日誌 (`trigger=manual/dep`)，便於追蹤自動重啟原因。
+
 [Link]: https://github.com/Ericechen/TaskMancer
