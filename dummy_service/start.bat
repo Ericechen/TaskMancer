@@ -1,6 +1,6 @@
 @echo off
 echo [DummyService] Starting...
 echo [DummyService] Running...
-:: Ping localhost to simulate a long running process (e.g. 60 seconds)
-ping 127.0.0.1 -n 60 > nul
+:: Use timeout for stable waiting (NOC mode compatible)
+timeout /t 99999 /nobreak > nul
 echo [DummyService] Stopped.

@@ -248,4 +248,9 @@
 - [x] **Identity Consistency**: 確保 Dashboard 與 ProjectCard 引用同一記憶體物件，解決不同步問題。
 - [x] **Reactivity Fix**: 修正 Vue 3 在物件替換時的反應性斷鏈問題。
 
+## v13.9.0 - Stability & Infrastructure (已完成)
+- [x] **Hotfix**: 修正 `watcher.py` 傳遞參數錯誤導致的 `TypeError`。
+- [x] **Service Reliability**: 修正 `dummy_service` 的 Ping 模擬邏輯，使其支援無限期運行 (`-n 99999`)。
+- [x] **State Integrity**: 徹底消除因 Watcher 報錯導致的後端狀態不一致問題。
+
 [Link]: https://github.com/Ericechen/TaskMancer

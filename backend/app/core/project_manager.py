@@ -270,13 +270,20 @@ class ProjectManager:
         self.data_cache[norm_path] = {'data': res, 'ts': now}
         return res
 
-    async def notify_clients(self, patch_path: str = None):
+    async def notify_clients(self, patch_path: str = None, force_metrics_paths: set = None):
         # [v13.7] 廣播前先移除已經停止的進程對象 (Zombie Cleanup)
         # Iterate over a copy to allow modification
         stopped_paths = [path for path, proc in self.active_processes.items() if not proc.is_running]
         for path in stopped_paths:
             if path != self.self_path: # 保護自我監控
                 del self.active_processes[path]
+
+        # [v13.9] Watcher Structural Changes Handling
+        if force_metrics_paths:
+            for raw_path in force_metrics_paths:
+                norm = self._normalize_path(raw_path)
+                if norm in self.data_cache: del self.data_cache[norm]
+                if norm in self.project_meta_cache: del self.project_meta_cache[norm]
 
         if patch_path:
             norm_patch = self._normalize_path(patch_path)
