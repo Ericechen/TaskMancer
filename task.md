@@ -236,4 +236,11 @@
 - [x] **簡易托盤介面**：實作 `TrayInterface.vue` 提供極簡控制面板。
 - [x] **智慧路由**：利用 URL 參數 (`?tray=true`) 實現托盤視窗專用介面。
 
+## v13.5.0 - Reliability & Smart Synchronization (已完成)
+- [x] **托盤選單強化**：新增「重新啟動 TaskMancer」選項，簡化開發流程。
+- [x] **路徑一致性標準化**：統一 Patch 與 Full State 路徑格式，解決 Windows 同步失效問題。
+- [x] **智能狀態合併 (Smart Merge)**：前端 Store 升級為增量合併模式，保留 UI 互動狀態（展開/日誌）。
+- [x] **依賴連動優化**：實現不分大小寫的依賴匹配與啟動後的標準化廣播，確保串流狀態即時化。
+- [x] **即時停止反饋**：點擊停止時立即更新 UI，消除背景進程清理的視覺延遲。
+
 [Link]: https://github.com/Ericechen/TaskMancer

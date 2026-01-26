@@ -76,3 +76,8 @@
 
 ## v12.2 - DevOps Infrastructure (已完成)
 - [x] 升級 `StopTaskMancer.bat`：確保背景服務能徹底清理不殘留。
+
+## v13.5 - Reliability & Smart Sync (已完成)
+- [x] 托盤重啟功能。
+- [x] 全路徑標準化與增量合併協議 (Patch Merge)。
+- [x] 依賴項狀態監控與即時反饋優化。

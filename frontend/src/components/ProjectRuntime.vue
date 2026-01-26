@@ -15,8 +15,9 @@ const dependencies = computed(() => {
     const normDep = dep.toLowerCase().replace(/\\/g, '/')
     
     // Find the project that matches this dependency name
+    const depLower = dep.toLowerCase()
     const found = projectStore.projects.find(p => 
-        p.name === dep || 
+        p.name.toLowerCase() === depLower || 
         p.path.toLowerCase().replace(/\\/g, '/') === normDep
     )
 

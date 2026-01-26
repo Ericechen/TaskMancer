@@ -7,11 +7,22 @@ import threading
 import sys
 import time
 
+import logging
+
+# 設定日誌
+logging.basicConfig(
+    filename="tray_app.log",
+    level=logging.DEBUG,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
+
 # 配置
 START_BAT = "start.bat"
 STOP_BAT = "StopTaskMancer.bat"
-ICON_PATH = "frontend/public/vite.svg" # 或者使用生成的圖示
+ICON_PATH = "frontend/public/vite.svg" 
 DASHBOARD_URL = "http://localhost:5173"
+
+logging.info("Tray App started")
 
 def run_bat(bat_file):
     """執行 bat 檔案且不顯示視窗"""
@@ -34,45 +45,67 @@ def on_quit(icon, item):
 def on_open(icon, item):
     open_dashboard()
 
+def on_restart(icon, item):
+    """重新啟動服務與托盤程式"""
+    logging.info("Initiating restart...")
+    run_bat(STOP_BAT)
+    # 給一點時間讓 Stop.bat 執行
+    time.sleep(2)
+    icon.stop()
+    
+    # 重新啟動當前腳本 (使用當前的 Python 解釋器)
+    python = sys.executable
+    os.execl(python, python, *sys.argv)
+
 def setup():
-    # 1. 啟動服務
-    run_bat(START_BAT)
+    try:
+        logging.info(f"Setting up: running {START_BAT}")
+        # 1. 啟動服務
+        run_bat(START_BAT)
+    except Exception as e:
+        logging.error(f"Error in setup: {e}")
 
 def create_tray():
-    # 優先使用生成的圖示
-    icon_candidates = [
-        "assets/icons/icon.ico",
-        "assets/icons/app-icon.png",
-        "frontend/public/vite.svg"
-    ]
-    
-    img = None
-    for path in icon_candidates:
-        if os.path.exists(path):
-            try:
-                img = Image.open(path)
-                break
-            except:
-                continue
-    
-    if img is None:
-        img = Image.new('RGB', (64, 64), color=(124, 92, 255))
+    try:
+        logging.info("Creating tray icon")
+        # 優先使用生成的圖示
+        icon_candidates = [
+            "assets/icons/icon.ico",
+            "assets/icons/app-icon.png",
+            "frontend/public/vite.svg"
+        ]
+        
+        img = None
+        for path in icon_candidates:
+            if os.path.exists(path):
+                try:
+                    logging.debug(f"Attempting to load icon from: {path}")
+                    img = Image.open(path)
+                    break
+                except Exception as e:
+                    logging.warning(f"Failed to load icon {path}: {e}")
+                    continue
+        
+        if img is None:
+            logging.info("Using default purple icon")
+            img = Image.new('RGB', (64, 64), color=(124, 92, 255))
 
-    menu = pystray.Menu(
-        pystray.MenuItem("開啟儀表板", on_open, default=True),
-        pystray.MenuItem("結束 TaskMancer", on_quit)
-    )
+        menu = pystray.Menu(
+            pystray.MenuItem("開啟儀表板", on_open, default=True),
+            pystray.MenuItem("重新啟動 TaskMancer", on_restart),
+            pystray.MenuItem("結束 TaskMancer", on_quit)
+        )
 
-    icon = pystray.Icon("TaskMancer", img, "TaskMancer", menu)
-    
-    # 雙擊行為 (某些系統支援，若不支援則用右鍵菜單)
-    icon.run_detached()
-    
-    # 模擬雙擊 (pystray 本身不直接支援 double_click 事件，但 MenuItem(default=True) 會在點擊圖示時觸發)
+        icon = pystray.Icon("TaskMancer", img, "TaskMancer", menu)
+        
+        logging.info("Running icon")
+        icon.run()
+    except Exception as e:
+        logging.error(f"Error in create_tray: {e}")
 
 if __name__ == "__main__":
-    setup()
-    create_tray()
-    # 保持主線程運行
-    while True:
-        time.sleep(1)
+    try:
+        setup()
+        create_tray()
+    except Exception as e:
+        logging.critical(f"Critical error in main: {e}")
