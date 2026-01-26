@@ -261,4 +261,8 @@
 - [x] **Ghost Click Prevention**: 在前端 `toggleDev` 增加 1 秒冷卻機制 (Debounce)，防止雙擊或快速點擊導致的重複啟動請求。
 - [x] **Cleanup**: 移除所有臨時調試日誌。
 
+## v13.13.0 - Strict Confirmation Lifecycle (已完成)
+- [x] **Verification Loop**: 後端實現「停止即確認」機制 (`wait_for_death`)，在進程未完全從 OS 消失前不更新 UI。
+- [x] **State Awareness**: UI 狀態更新現在是嚴格傳導的 (Stopped -> Stopping -> Dead)，徹底解決假性停止問題。
+
 [Link]: https://github.com/Ericechen/TaskMancer
