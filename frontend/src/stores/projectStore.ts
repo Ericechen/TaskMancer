@@ -122,21 +122,42 @@ export const useProjectStore = defineStore('project', () => {
       const data = JSON.parse(event.data)
       
       if (data.projects) {
-        // [v13.5] Smarter merge for full state updates
-        const newProjects = data.projects.map((p: any) => {
-          const cleanPath = p.path.toLowerCase().replace(/\\/g, '/')
-          const existing = projects.value.find(prj => prj.path === cleanPath)
-          return {
-            ...p,
-            path: cleanPath,
-            isExpanded: existing ? existing.isExpanded : false
-          }
+        // [v13.8] Strict Referential Integrity: Mutate in place
+        const incomingMap = new Map()
+        data.projects.forEach((p: any) => {
+            const cleanPath = p.path.toLowerCase().replace(/\\/g, '/')
+            incomingMap.set(cleanPath, { ...p, path: cleanPath })
         })
-        projects.value = newProjects
+
+        // 1. Update Existing & Add New
+        incomingMap.forEach((newData, path) => {
+            const existing = projects.value.find(p => p.path === path)
+            if (existing) {
+                // Update properties in place
+                Object.assign(existing, newData)
+                
+                // Deep merge process manually to preserve any internal Vue observers if specific refs were used
+                // But Object.assign on the reactive object is usually sufficient for deep reactivity in Vue 3
+                if (newData.process) {
+                   existing.process = existing.process || { is_running: false, stats: null, has_error: false }
+                   Object.assign(existing.process, newData.process)
+                }
+            } else {
+                projects.value.push(newData)
+            }
+        })
+
+        // 2. Remove Stale
+        for (let i = projects.value.length - 1; i >= 0; i--) {
+            if (!incomingMap.has(projects.value[i].path)) {
+                projects.value.splice(i, 1)
+            }
+        }
         
         if (data.system) {
           totalSystemRamMb.value = data.system.ram_total_gb * 1024
         }
+
       } else if (data.type === 'log') {
         const path = data.path?.toLowerCase().replace(/\\/g, '/')
         if (path) {
@@ -150,79 +171,47 @@ export const useProjectStore = defineStore('project', () => {
         }
       } else if (data.type === 'log_status') {
           const dataPath = data.path.toLowerCase().replace(/\\/g, '/')
-          const index = projects.value.findIndex(p => p.path === dataPath)
-          if (index !== -1) {
-            const existing = projects.value[index]
-            if (!existing) return
+          const project = projects.value.find(p => p.path === dataPath)
+          if (project) {
+            if (!project.process) project.process = { is_running: false, stats: null, has_error: false }
             
             if (data.status === 'stopped') {
-                // [v13.7] Hard reset the process object via replacement
-                projects.value[index] = {
-                    ...existing,
-                    process: {
-                        is_running: false,
-                        stats: null,
-                        history: undefined,
-                        has_error: false
-                    }
-                } as any
+                // [v13.8] In-place reset
+                project.process.is_running = false
+                project.process.stats = null
+                project.process.history = undefined
+                project.process.has_error = false
             } else {
-                const process = existing.process || { is_running: false, stats: null, has_error: false }
-                process.is_running = data.status === 'started' || data.status === 'running'
-                projects.value[index] = { ...existing, process } as any
+                project.process.is_running = data.status === 'started' || data.status === 'running'
             }
           }
       } else if (data.type === 'process_stats') {
         const path = data.path?.toLowerCase().replace(/\\/g, '/')
-        const index = projects.value.findIndex(p => p.path === path)
-        if (index !== -1) {
-          const existing = projects.value[index]
-          if (!existing) return
-          
-          projects.value[index] = {
-            ...existing,
-            process: {
-                ...(existing.process || { has_error: false }),
-                is_running: true,
-                stats: data.stats,
-                history: data.history
-            }
-          } as any
+        const project = projects.value.find(p => p.path === path)
+        if (project) {
+          if (!project.process) project.process = { is_running: true, stats: null, has_error: false }
+          project.process.is_running = true
+          project.process.stats = data.stats
+          project.process.history = data.history
         }
       } else if (data.type === 'process_error') {
         const path = data.path?.toLowerCase().replace(/\\/g, '/')
-        const index = projects.value.findIndex(p => p.path === path)
-        if (index !== -1) {
-          const existing = projects.value[index]
-          if (!existing) return
-          
-          projects.value[index] = {
-            ...existing,
-            process: {
-                ...(existing.process || { is_running: true, stats: null, history: undefined }),
-                has_error: data.has_error
-            }
-          } as any
+        const project = projects.value.find(p => p.path === path)
+        if (project) {
+          if (!project.process) project.process = { is_running: true, stats: null, has_error: false }
+          project.process.has_error = data.has_error
         }
       } else if (data.type === 'project_patch') {
         const pData = data.project
         const cleanPath = pData.path.toLowerCase().replace(/\\/g, '/')
-        const index = projects.value.findIndex(prj => prj.path === cleanPath)
+        const existing = projects.value.find(p => p.path === cleanPath)
         
-        if (index !== -1) {
-          const existing = projects.value[index]
-          if (existing) {
-            // [v13.5] Deep merge process to avoid losing has_error or stats
-            projects.value[index] = { 
-              ...existing, 
-              ...pData, 
-              path: cleanPath,
-              isExpanded: existing.isExpanded,
-              process: {
-                  ...(existing.process || {}),
-                  ...(pData.process || {})
-              }
-            } as any
+        if (existing) {
+          // [v13.8] In-place deep update
+          Object.assign(existing, pData)
+          if (pData.process) {
+              existing.process = existing.process || { is_running: false, stats: null, has_error: false }
+              Object.assign(existing.process, pData.process)
           }
         } else {
           projects.value.push({ ...pData, path: cleanPath })
