@@ -319,15 +319,16 @@ class ProjectManager:
         state = await self.get_current_state(force_refresh=True) # Force refresh on global notify
         await self.connection_manager.broadcast(state)
 
-    async def start_project(self, target_path: Path):
+    async def start_project(self, target_path: Path, trigger: str = "manual"):
         n_path = self._normalize_path(str(target_path))
+        logger.info(f"REQUEST START: {n_path} (Trigger: {trigger})")
+
         if n_path == self.self_path: return
 
-        # 若已有舊進程且未運行，先清除
-        if n_path in self.active_processes and not self.active_processes[n_path].is_running:
-            del self.active_processes[n_path]
-
-        if n_path in self.active_processes and self.active_processes[n_path].is_running: return 
+        # 啟動中防護
+        if n_path in self.active_processes and self.active_processes[n_path].is_running: 
+            logger.info(f"SKIP START: {n_path} is already running.")
+            return 
 
         c_path = target_path / "config.md"
         p_config = ConfigParser.parse_file(str(c_path)) if c_path.exists() else {}
@@ -339,7 +340,8 @@ class ProjectManager:
                 if dep_path:
                     is_run = dep_path in self.active_processes and self.active_processes[dep_path].is_running
                     if not is_run:
-                        await self.start_project(Path(dep_path))
+                        logger.info(f"AUTO-START Dependency: {d_name} for {target_path.name}")
+                        await self.start_project(Path(dep_path), trigger=f"dep_of_{target_path.name}")
 
         proc = RunningProcess(n_path, target_path.name, self.connection_manager, db_manager=self.db_manager)
         self.active_processes[n_path] = proc

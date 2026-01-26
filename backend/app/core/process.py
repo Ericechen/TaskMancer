@@ -190,14 +190,20 @@ class RunningProcess:
         停止進程及其所有子進程。
         """
         if self.process:
+            pid = self.process.pid
             try:
-                # 使用 psutil 清理整個進程樹
-                parent = psutil.Process(self.process.pid)
-                for child in parent.children(recursive=True):
-                    child.kill()
-                parent.kill()
+                # [v13.?) Force Kill for Windows to prevent Zombies
+                if os.name == 'nt':
+                     import subprocess
+                     subprocess.run(f"taskkill /F /T /PID {pid}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                else:
+                    # Unix-like cleanup
+                    parent = psutil.Process(pid)
+                    for child in parent.children(recursive=True):
+                        child.kill()
+                    parent.kill()
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 pass
             except Exception as e:
-                logger.error(f"Stop process failed: {e}")
+                logger.error(f"Stop process {self.name} failed: {e}")
             self.is_running = False
