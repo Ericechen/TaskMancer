@@ -265,4 +265,8 @@
 - [x] **Verification Loop**: 後端實現「停止即確認」機制 (`wait_for_death`)，在進程未完全從 OS 消失前不更新 UI。
 - [x] **State Awareness**: UI 狀態更新現在是嚴格傳導的 (Stopped -> Stopping -> Dead)，徹底解決假性停止問題。
 
+## v13.14.0 - State Lock Refactor (已完成)
+- [x] **Strict State Lock**: 重構 `ProjectManager`，在 `start_project` 導入強制鎖 (`stopping` 狀態下禁止啟動)，防止競爭條件導致的重啟迴圈。
+- [x] **Safe Dependency Logic**: 遞迴檢查依賴項狀態，若依賴項正在停止與卸載，則跳過自動啟動。
+
 [Link]: https://github.com/Ericechen/TaskMancer
