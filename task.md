@@ -243,4 +243,9 @@
 - [x] **依賴連動優化**：實現不分大小寫的依賴匹配與啟動後的標準化廣播，確保串流狀態即時化。
 - [x] **即時停止反饋**：點擊停止時立即更新 UI，消除背景進程清理的視覺延遲。
 
+## v13.8.0 - State Referential Integrity (已完成)
+- [x] **Frontend Refactor**: 將 `projectStore.ts` 重構為 In-Place Mutation 模式 (Object.assign)。
+- [x] **Identity Consistency**: 確保 Dashboard 與 ProjectCard 引用同一記憶體物件，解決不同步問題。
+- [x] **Reactivity Fix**: 修正 Vue 3 在物件替換時的反應性斷鏈問題。
+
 [Link]: https://github.com/Ericechen/TaskMancer
