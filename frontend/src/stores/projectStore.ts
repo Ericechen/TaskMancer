@@ -68,7 +68,7 @@ export interface Project {
     stats?: { cpu: number; ram: number } | null;
     history?: { cpu: number[]; ram: number[] };
     has_error: boolean;
-    alert_level?: 'normal' | 'warning' | 'critical';
+    alert_level?: 'normal' | 'warning' | 'critical' | 'starting' | 'stopping';
   };
   isExpanded?: boolean;
 }
@@ -190,8 +190,12 @@ export const useProjectStore = defineStore('project', () => {
         const project = projects.value.find(p => p.path === path)
         if (project) {
           if (!project.process) project.process = { is_running: true, stats: null, has_error: false }
-          project.process.is_running = true
-          project.process.stats = data.stats
+          // [v13.19] 處理 starting 狀態：stats 可能為 null
+          if (data.alert_level !== 'starting') {
+            project.process.is_running = true
+            project.process.stats = data.stats
+          }
+          project.process.alert_level = data.alert_level
           project.process.history = data.history
         }
       } else if (data.type === 'process_error') {

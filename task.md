@@ -127,8 +127,6 @@
 - [x] 關閉後端 `PortScanner` 的全域備用掃描 (COMMON_DEV_PORTS)
 - [x] 確保精確顯示已定義的埠口狀態
 
-[Link]: https://github.com/Ericechen/TaskMancer
-
 ## v9.4 - Bug Fix (配置解析與掃描增強) (已完成)
 - [x] 優化 `config_parser` 正則表達式，支援更寬鬆的語法
 - [x] 增強 `PortScanner` 連線能力 (Localhost 優先 + Timeout 放寬)
@@ -137,7 +135,7 @@
 ## v9.5 - Hotfix (恢復 127.0.0.1 掃描) (已完成)
 - [x] 修正 `live_utils.py`: 恢復使用 IP 直連，解決 Windows Localhost 解析導致的 API 卡死問題
 - [x] 確保前端能正確獲取後端資料
- 
+
  ## v9.6 - Stability (全域異常防護) (已完成)
  - [x] `main.py`: 實作 `scan_root` 層級的異常隔離，防止單一專案解析失敗導致 WebSocket 斷線
  - [x] `asyncio.gather`: 啟用 `return_exceptions=True` 避免 Root 掃描崩潰
@@ -272,5 +270,11 @@
 ## v13.15.0 - Serialized State Management (已完成)
 - [x] **Project Mutex**: 引入 `asyncio.Lock` 為每個專案建立獨立互斥鎖，強制序列化 start/stop 操作。
 - [x] **Race Condition Fix**: 徹底防止「停止中途插入啟動」的競爭狀態，解決了快速切換時導致的 Action Failed 或殭屍進程重啟問題。
+
+## v13.16.0 - UI/UX Polish (進行中)
+- [x] **Stop Flicker Fix**: 修正 `monitor_resources` 在停止過程中覆寫狀態導致的 UI 閃爍問題 (Off -> On -> Off)。
+- [x] **Stop Flicker Fix**: 修正 `monitor_resources` 在停止過程中覆寫狀態導致的 UI 閃爍問題 (Off -> On -> Off)。
+- [x] **Stopping Visual Effect**: 實作「停止中」視覺特效 (紅燈呼吸 + Stopping... 文字)。
+- [x] **Optimistic UI Feedback**: 點擊停止時立即渲染「Stopping」狀態，消除 1~2 秒的網絡延遲感。
 
 [Link]: https://github.com/Ericechen/TaskMancer

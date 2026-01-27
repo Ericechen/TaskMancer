@@ -46,11 +46,19 @@ class ProjectManager:
         
         self.self_path = self._normalize_path(str(Path(__file__).parents[3]))
         self.db_manager = DatabaseManager()
+        # [v13.15] Async Mutex Locks for Project Operations
+        # 防止針對同一專案的並發 Start/Stop 導致狀態競爭
+        self.project_locks: Dict[str, asyncio.Lock] = {}
         psutil.cpu_percent(interval=None)
 
     def _normalize_path(self, path: str) -> str:
         if not path: return ""
         return os.path.abspath(path).lower().replace("\\", "/")
+
+    def get_lock(self, path: str) -> asyncio.Lock:
+        if path not in self.project_locks:
+            self.project_locks[path] = asyncio.Lock()
+        return self.project_locks[path]
 
     def start_watcher(self):
         loop = asyncio.get_running_loop()
@@ -271,9 +279,12 @@ class ProjectManager:
         return res
 
     async def notify_clients(self, patch_path: str = None, force_metrics_paths: set = None):
-        # [v13.7] 廣播前先移除已經停止的進程對象 (Zombie Cleanup)
-        # Iterate over a copy to allow modification
-        stopped_paths = [path for path, proc in self.active_processes.items() if not proc.is_running]
+        # [v13.23] 修復：只移除真正被 stop 過的進程 (_stop_requested=True)
+        # 避免誤刪還在啟動中的進程 (is_running=False 但 _stop_requested=False)
+        stopped_paths = [
+            path for path, proc in self.active_processes.items() 
+            if not proc.is_running and proc._stop_requested
+        ]
         for path in stopped_paths:
             if path != self.self_path: # 保護自我監控
                 del self.active_processes[path]
@@ -322,57 +333,149 @@ class ProjectManager:
     async def start_project(self, target_path: Path, trigger: str = "manual"):
         n_path = self._normalize_path(str(target_path))
         
-        # [Debug] Trace Log
-        try:
-            with open("start_triggers.log", "a", encoding="utf-8") as f:
-                import datetime
-                f.write(f"[{datetime.datetime.now()}] START REQUEST: {n_path} | Trigger: {trigger}\n")
-        except: pass
+        # [v13.15] Critical State Lock
+        async with self.get_lock(n_path):
+            # [v13.14] Strict State Lock (Anti-Race Condition)
+            # 如果該專案正在停止中，絕對禁止啟動，防止停止過程中的競爭請求
+            if n_path in self.active_processes:
+                proc = self.active_processes[n_path]
+                if proc.alert_level == 'stopping':
+                    logger.warning(f"BLOCKED START: {n_path} is currently stopping. Trigger: {trigger}")
+                    return 
 
-        logger.info(f"REQUEST START: {n_path} (Trigger: {trigger})")
+            # [v13.22] 統一生命週期追蹤
+            import traceback
+            try:
+                with open("lifecycle_debug.log", "a", encoding="utf-8") as f:
+                    import datetime
+                    f.write(f"[{datetime.datetime.now().strftime('%H:%M:%S.%f')[:-3]}] START_PROJECT: {n_path} | trigger={trigger}\n")
+            except: pass
 
-        if n_path == self.self_path: return
+            logger.info(f"REQUEST START: {n_path} (Trigger: {trigger})")
 
-        # 啟動中防護
-        if n_path in self.active_processes and self.active_processes[n_path].is_running: 
-            logger.info(f"SKIP START: {n_path} is already running.")
-            return 
+            if n_path == self.self_path: return
 
-        c_path = target_path / "config.md"
-        p_config = ConfigParser.parse_file(str(c_path)) if c_path.exists() else {}
-        deps = p_config.get('depends_on', [])
+            # [v13.24] 啟動中防護：同時檢查 is_running 和 alert_level
+            if n_path in self.active_processes:
+                proc = self.active_processes[n_path]
+                if proc.is_running:
+                    logger.info(f"SKIP START: {n_path} is already running.")
+                    return
+                if proc.alert_level == 'starting':
+                    logger.info(f"SKIP START: {n_path} is already starting.")
+                    return
 
-        if deps:
-            for d_name in [d.strip() for d in deps]:
-                dep_path = next((p for p, m in self.project_meta_cache.items() if m['name'].lower() == d_name.lower() or p == self._normalize_path(d_name)), None)
-                if dep_path:
-                    is_run = dep_path in self.active_processes and self.active_processes[dep_path].is_running
-                    if not is_run:
-                        logger.info(f"AUTO-START Dependency: {d_name} for {target_path.name}")
-                        await self.start_project(Path(dep_path), trigger=f"dep_of_{target_path.name}")
+            c_path = target_path / "config.md"
+            p_config = ConfigParser.parse_file(str(c_path)) if c_path.exists() else {}
+            deps = p_config.get('depends_on', [])
 
-        proc = RunningProcess(n_path, target_path.name, self.connection_manager, db_manager=self.db_manager)
-        self.active_processes[n_path] = proc
-        abs_bat = os.path.abspath(os.path.join(str(target_path), "start.bat"))
-        if os.path.exists(abs_bat):
-            e_vars = ConfigParser.get_env_vars(str(c_path)) if c_path.exists() else {}
-            await proc.start(f'"{abs_bat}"', {**e_vars, "CI": "true"})
-            # [v13.7] 立即讓全域快取失效並廣播
-            self.system_state_cache = None
-            asyncio.create_task(self.notify_clients(patch_path=n_path))
+            if deps:
+                for d_name in [d.strip() for d in deps]:
+                    dep_path = next((p for p, m in self.project_meta_cache.items() if m['name'].lower() == d_name.lower() or p == self._normalize_path(d_name)), None)
+                    if dep_path:
+                        # [v13.14] Dependency Loop Protection
+                        # 防止 A -> B, B -> A 無限循環啟動
+                        # 只有當依賴項完全沒在運行時才啟動
+                        is_run = dep_path in self.active_processes and self.active_processes[dep_path].is_running
+                        if not is_run:
+                            # Check recursively if dependency is stopping
+                             if dep_path in self.active_processes and self.active_processes[dep_path].alert_level == 'stopping':
+                                 logger.info(f"SKIP DEP START: {d_name} is stopping.")
+                                 continue
+                             
+                             logger.info(f"AUTO-START Dependency: {d_name} for {target_path.name}")
+                             # Recursive call will form its own lock check
+                             await self.start_project(Path(dep_path), trigger=f"dep_of_{target_path.name}")
 
-    def stop_project(self, path: Path) -> Dict[str, str]:
+            proc = RunningProcess(n_path, target_path.name, self.connection_manager, db_manager=self.db_manager)
+            self.active_processes[n_path] = proc
+            abs_bat = os.path.abspath(os.path.join(str(target_path), "start.bat"))
+            if os.path.exists(abs_bat):
+                # [v13.19] 廣播 starting 狀態，讓前端鎖定 switch
+                proc.alert_level = 'starting'
+                await self.connection_manager.broadcast({
+                    "type": "process_stats",
+                    "path": n_path,
+                    "stats": None,
+                    "alert_level": "starting",
+                    "history": {"cpu": [], "ram": []}
+                })
+                
+                # [v13.26] 從 config 取得 health check port
+                e_vars = ConfigParser.get_env_vars(str(c_path)) if c_path.exists() else {}
+                health_port = None
+                if p_config.get('explicit_ports'):
+                    health_port = p_config['explicit_ports'][0]['port']
+                    logger.info(f"Health check port for {target_path.name}: {health_port}")
+                
+                await proc.start(f'"{abs_bat}"', {**e_vars, "CI": "true"}, health_check_port=health_port)
+                # [v13.7] 立即讓全域快取失效並廣播
+                self.system_state_cache = None
+                asyncio.create_task(self.notify_clients(patch_path=n_path))
+
+    async def stop_project(self, path: Path) -> Dict[str, str]:
         norm_path = self._normalize_path(str(path))
-        if norm_path in self.data_cache: del self.data_cache[norm_path]
-        self.system_state_cache = None
+        
+        # [v13.22] 詳細追蹤
+        try:
+            with open("lifecycle_debug.log", "a", encoding="utf-8") as f:
+                import datetime
+                f.write(f"[{datetime.datetime.now().strftime('%H:%M:%S.%f')[:-3]}] STOP_PROJECT: norm_path={norm_path}\n")
+                f.write(f"  active_processes.keys() = {list(self.active_processes.keys())}\n")
+                f.write(f"  match = {norm_path in self.active_processes}\n")
+        except: pass
+        
+        # [v13.15] Critical State Lock
+        async with self.get_lock(norm_path):
+            if norm_path in self.data_cache: del self.data_cache[norm_path]
+            self.system_state_cache = None
 
-        if norm_path == self.self_path: return {"status": "error", "message": "Self-Protection active."}
-        if norm_path in self.active_processes:
-            proc = self.active_processes[norm_path]
-            proc.stop()
-            asyncio.create_task(self.connection_manager.broadcast({
-                "type": "log_status", "project": proc.name, "path": proc.project_path, "status": "stopped"
-            }))
-            asyncio.create_task(self.notify_clients())
-            return {"status": "success", "message": "Stopped."}
-        return {"status": "not_running", "message": "Not running."}
+            if norm_path == self.self_path: return {"status": "error", "message": "Self-Protection active."}
+            
+            if norm_path in self.active_processes:
+                proc = self.active_processes[norm_path]
+                
+                # [v13.24] 重複停止防護
+                if proc.alert_level == 'stopping':
+                    logger.info(f"SKIP STOP: {norm_path} is already stopping.")
+                    return {"status": "skipped", "message": "Already stopping."}
+                
+                # 1. 廣播 "Stopping" 狀態
+                proc.alert_level = 'stopping'
+                await self.connection_manager.broadcast({
+                     "type": "process_stats",
+                     "path": norm_path,
+                     "stats": proc.stats,
+                     "alert_level": "stopping",
+                     "history": {"cpu": list(proc.cpu_history), "ram": list(proc.ram_history)}
+                })
+                
+                # 2. 執行停止 (觸發 taskkill)
+                proc.stop()
+                
+                # 3. [v13.13] 強制等待並驗證進程死亡
+                is_dead = await proc.wait_for_death()
+                
+                if is_dead:
+                    # Double check if it's still there (race condition safety)
+                    if norm_path in self.active_processes:
+                        del self.active_processes[norm_path]
+                    
+                    await self.connection_manager.broadcast({
+                        "type": "log_status", "project": proc.name, "path": proc.project_path, "status": "stopped"
+                    })
+                    await self.notify_clients() # 全局刷新
+                    return {"status": "success", "message": "Stopped."}
+                else:
+                    # [v13.25] 即使進程沒死掉，也要從 active_processes 移除
+                    # 這樣用戶可以重試啟動（taskkill 已經執行過了）
+                    if norm_path in self.active_processes:
+                        del self.active_processes[norm_path]
+                    
+                    await self.connection_manager.broadcast({
+                        "type": "log_status", "project": proc.name, "path": proc.project_path, "status": "stopped"
+                    })
+                    await self.notify_clients()
+                    return {"status": "warning", "message": "Process may still be running (zombie). Retry if needed."}
+
+            return {"status": "not_running", "message": "Not running."}

@@ -68,11 +68,15 @@ async def run_project_action(request: CommandRequest):
     """
     manager = get_project_manager()
     try:
-        # [Debug] Trace Log
+        # [v13.22] 統一生命週期追蹤
         try:
-            with open("api_requests.log", "a", encoding="utf-8") as f:
+            with open("lifecycle_debug.log", "a", encoding="utf-8") as f:
                 import datetime
-                f.write(f"[{datetime.datetime.now()}] ACTION: {request.action} | Path: {request.path}\n")
+                import traceback
+                f.write(f"\n[{datetime.datetime.now().strftime('%H:%M:%S.%f')[:-3]}] API: {request.action} | {request.path}\n")
+                f.write("  Call stack:\n")
+                for line in traceback.format_stack()[-3:-1]:
+                    f.write(f"    {line.strip()}\n")
         except: pass
 
         path = Path(request.path)
@@ -100,14 +104,20 @@ async def run_project_action(request: CommandRequest):
             return {"status": "success", "message": "Project and dependencies starting..."}
             
         elif request.action == "stop":
-            return manager.stop_project(path)
+            return await manager.stop_project(path)
 
         else:
             raise HTTPException(status_code=400, detail="Unknown action")
             
     except Exception as e:
         logger.error(f"Error running action: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        # [Debug] Capture detailed error
+        try:
+            with open("last_error.log", "w", encoding="utf-8") as f:
+                import traceback
+                f.write(f"Action: {request.action}\nPath: {request.path}\nError: {str(e)}\nTraceback:\n{traceback.format_exc()}")
+        except: pass
+        raise HTTPException(status_code=500, detail=f"Internal Error: {str(e)}")
 
 @router.post("/upload")
 async def upload_project_files(path: str = Form(...), files: List[UploadFile] = File(...)):

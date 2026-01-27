@@ -121,16 +121,25 @@ function formatSize(bytes?: number): string {
             <!-- Dev Switch (v10.5) -->
             <div v-if="project.hasStartBat" class="flex items-center space-x-2 px-2.5 py-1.5 rounded-lg bg-surface/50 border border-white/5 shadow-sm shrink-0">
                 <span class="text-[9px] font-black uppercase tracking-widest text-secondary/60">Dev</span>
+                <!-- [v13.19] 啟動中狀態禁用 switch -->
+                <!-- [v13.27] 停止中狀態禁用 switch 並顯示特效 -->
                 <button 
                     @click="toggleDev(project)"
-                    class="relative inline-flex h-3.5 w-7 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
-                    :class="project.process?.is_running ? 'bg-success/50' : 'bg-white/10'"
+                    :disabled="project.process?.alert_level === 'starting' || project.process?.alert_level === 'stopping'"
+                    class="relative inline-flex h-3.5 w-7 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                    :class="[
+                        project.process?.alert_level === 'starting' ? 'bg-warning/50 animate-pulse cursor-not-allowed' :
+                        project.process?.alert_level === 'stopping' ? 'bg-danger/50 animate-pulse cursor-not-allowed' :
+                        project.process?.is_running ? 'bg-success/50 cursor-pointer' : 'bg-white/10 cursor-pointer'
+                    ]"
                 >
                     <span 
                         class="pointer-events-none inline-block h-2.5 w-2.5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
-                        :class="project.process?.is_running ? 'translate-x-3.5' : 'translate-x-0'"
+                        :class="(project.process?.is_running && project.process?.alert_level !== 'stopping') || project.process?.alert_level === 'starting' ? 'translate-x-3.5' : 'translate-x-0'"
                     />
                 </button>
+                <span v-if="project.process?.alert_level === 'starting'" class="text-[8px] text-warning animate-pulse font-bold">Starting...</span>
+                <span v-else-if="project.process?.alert_level === 'stopping'" class="text-[8px] text-danger animate-pulse font-bold">Stopping...</span>
             </div>
 
             <button 
