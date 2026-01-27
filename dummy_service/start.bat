@@ -1,6 +1,0 @@
-@echo off
-echo [DummyService] Starting...
-echo [DummyService] Running...
-:: Ping localhost to simulate a long running process (e.g. 60 seconds)
-ping 127.0.0.1 -n 60 > nul
-echo [DummyService] Stopped.
