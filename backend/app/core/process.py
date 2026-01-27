@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Dict, Optional, Deque, List, Any
 if TYPE_CHECKING:
     from app.core.websocket import ConnectionManager
     from app.core.db_manager import DatabaseManager
+from app.utils.lifecycle_logger import log as life_log
 
 logger = logging.getLogger("TaskMancer.Process")
 
@@ -72,12 +73,8 @@ class RunningProcess:
                 
                 if result == 0:
                     # Port 可連接！
-                    try:
-                        with open("lifecycle_debug.log", "a", encoding="utf-8") as f:
-                            import datetime
-                            elapsed = time.time() - start_time
-                            f.write(f"[{datetime.datetime.now().strftime('%H:%M:%S.%f')[:-3]}] HEALTH_CHECK_OK: {self.name} port {port} ready in {elapsed:.1f}s\n")
-                    except: pass
+                    # Port 可連接！
+                    life_log("PROCESS", f"HEALTH_CHECK_OK: {self.name}", self.project_path, f"port={port} ready_in={time.time() - start_time:.1f}s")
                     return True
             except Exception:
                 pass
@@ -85,11 +82,8 @@ class RunningProcess:
             await asyncio.sleep(check_interval)
         
         # 超時
-        try:
-            with open("lifecycle_debug.log", "a", encoding="utf-8") as f:
-                import datetime
-                f.write(f"[{datetime.datetime.now().strftime('%H:%M:%S.%f')[:-3]}] HEALTH_CHECK_TIMEOUT: {self.name} port {port} not ready after {timeout}s\n")
-        except: pass
+        # 超時
+        life_log("PROCESS", f"HEALTH_CHECK_TIMEOUT: {self.name}", self.project_path, f"port={port} timeout={timeout}s")
         return False
 
     async def start(self, cmd: str, env: dict, health_check_port: int = None):
@@ -116,11 +110,9 @@ class RunningProcess:
             # [v13.18] 競態條件保護：如果在 start 執行期間 stop 已被調用，立即終止
             if self._stop_requested:
                 logger.info(f"ABORTED START: {self.name} was stopped before start completed. Killing...")
-                try:
-                    with open("process_debug.log", "a", encoding="utf-8") as f:
-                        import datetime
-                        f.write(f"[{datetime.datetime.now()}] ABORTED START: {self.name} (PID: {self.process.pid}) - killed before start completed\n")
-                except: pass
+            if self._stop_requested:
+                logger.info(f"ABORTED START: {self.name} was stopped before start completed. Killing...")
+                life_log("PROCESS", "ABORTED_START", self.project_path, f"pid={self.process.pid} - killed before start completed")
                 self.process.kill()
                 return
             
@@ -312,11 +304,8 @@ class RunningProcess:
         [v13.21] 修復：允許多次調用，每次都嘗試終止進程。
         """
         # [v13.22] 詳細追蹤
-        try:
-            with open("lifecycle_debug.log", "a", encoding="utf-8") as f:
-                import datetime
-                f.write(f"[{datetime.datetime.now().strftime('%H:%M:%S.%f')[:-3]}] STOP(): {self.name} | process={self.process} | pid={self.process.pid if self.process else 'None'} | is_running={self.is_running}\n")
-        except: pass
+        # [v13.22] 詳細追蹤
+        life_log("PROCESS", "STOP()", self.project_path, f"pid={self.process.pid if self.process else 'None'} | is_running={self.is_running}")
 
         # 標記停止請求（供 start() 的 abort 邏輯使用）
         self._stop_requested = True
@@ -327,11 +316,7 @@ class RunningProcess:
             pid = self.process.pid
             try:
                 # [Debug] Log Stop Attempt
-                try:
-                    with open("lifecycle_debug.log", "a", encoding="utf-8") as f:
-                        import datetime
-                        f.write(f"[{datetime.datetime.now().strftime('%H:%M:%S.%f')[:-3]}] TASKKILL: {self.name} (PID: {pid})\n")
-                except: pass
+                life_log("PROCESS", "TASKKILL_ATTEMPT", self.project_path, f"pid={pid}")
 
                 # [v13.13] Nuclear Kill with Verification Support
                 if os.name == 'nt':
@@ -352,10 +337,7 @@ class RunningProcess:
                 logger.error(f"Stop process {self.name} failed: {e}")
         else:
             # 進程還沒創建，只是標記停止狀態
-            try:
-                with open("lifecycle_debug.log", "a", encoding="utf-8") as f:
-                    import datetime
-                    f.write(f"[{datetime.datetime.now().strftime('%H:%M:%S.%f')[:-3]}] STOP_SKIP: {self.name} - no process to kill\n")
-            except: pass
+            # 進程還沒創建，只是標記停止狀態
+            life_log("PROCESS", "STOP_SKIP", self.project_path, "no process object")
             logger.info(f"Stop requested for {self.name} but process not yet created (will abort on start)")
 

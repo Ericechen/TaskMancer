@@ -102,8 +102,6 @@
 - [x] Backend: 啟動專案時自動注入 `TM_PORT_[LABEL]` 環境變數
 - [x] Backend: `main.py` 支援 `--port` 參數接收動態埠口
 - [x] DevOps: 更新專案 `start.bat` 示範環璄變數動態接軌
-
-## v8.5 - Service Monitoring: 服務狀態燈號 (已完成)
 - [x] Backend: `PortScanner` 返回包含 `online/offline` 狀態的完整列表
 - [x] Frontend: `ProjectCard.vue` 實作狀態燈號 (綠色呼吸燈 = Online, 灰色 = Offline)
 
@@ -276,5 +274,13 @@
 - [x] **Stop Flicker Fix**: 修正 `monitor_resources` 在停止過程中覆寫狀態導致的 UI 閃爍問題 (Off -> On -> Off)。
 - [x] **Stopping Visual Effect**: 實作「停止中」視覺特效 (紅燈呼吸 + Stopping... 文字)。
 - [x] **Optimistic UI Feedback**: 點擊停止時立即渲染「Stopping」狀態，消除 1~2 秒的網絡延遲感。
+
+## v13.17.0 - Code Review & Analysis (已完成)
+- [x] **Code Reviewer Pro**: 執行 AI 代碼審核，分析潛在風險與優化空間，產出 `code_review_report.md`。
+
+## v13.18.0 - Stability & Performance Refactor (已完成)
+- [x] **Deadlock Protection**: 修復 `start_project` 中的遞迴鎖死問題，引入循環依賴偵測機制 (Visited Set)。
+- [x] **Logging Optimization**: 重構 `lifecycle_logger` 改用 Python 標準 `logging` 模組，移除所有阻塞式 I/O (`open` calls)。
+- [x] **Traceability**: 在 API 日誌中實作高效的 Stack Trace 格式化。
 
 [Link]: https://github.com/Ericechen/TaskMancer

@@ -1,0 +1,780 @@
+﻿diff --git a/backend/app/api/endpoints/projects.py b/backend/app/api/endpoints/projects.py
+index ea49f43..e177b06 100644
+--- a/backend/app/api/endpoints/projects.py
++++ b/backend/app/api/endpoints/projects.py
+@@ -68,11 +68,15 @@ async def run_project_action(request: CommandRequest):
+     """
+     manager = get_project_manager()
+     try:
+-        # [Debug] Trace Log
++        # [v13.22] 蝯曹???望?餈質馱
+         try:
+-            with open("api_requests.log", "a", encoding="utf-8") as f:
++            with open("lifecycle_debug.log", "a", encoding="utf-8") as f:
+                 import datetime
+-                f.write(f"[{datetime.datetime.now()}] ACTION: {request.action} | Path: {request.path}\n")
++                import traceback
++                f.write(f"\n[{datetime.datetime.now().strftime('%H:%M:%S.%f')[:-3]}] API: {request.action} | {request.path}\n")
++                f.write("  Call stack:\n")
++                for line in traceback.format_stack()[-3:-1]:
++                    f.write(f"    {line.strip()}\n")
+         except: pass
+ 
+         path = Path(request.path)
+@@ -100,14 +104,20 @@ async def run_project_action(request: CommandRequest):
+             return {"status": "success", "message": "Project and dependencies starting..."}
+             
+         elif request.action == "stop":
+-            return manager.stop_project(path)
++            return await manager.stop_project(path)
+ 
+         else:
+             raise HTTPException(status_code=400, detail="Unknown action")
+             
+     except Exception as e:
+         logger.error(f"Error running action: {e}")
+-        raise HTTPException(status_code=500, detail=str(e))
++        # [Debug] Capture detailed error
++        try:
++            with open("last_error.log", "w", encoding="utf-8") as f:
++                import traceback
++                f.write(f"Action: {request.action}\nPath: {request.path}\nError: {str(e)}\nTraceback:\n{traceback.format_exc()}")
++        except: pass
++        raise HTTPException(status_code=500, detail=f"Internal Error: {str(e)}")
+ 
+ @router.post("/upload")
+ async def upload_project_files(path: str = Form(...), files: List[UploadFile] = File(...)):
+diff --git a/backend/app/core/process.py b/backend/app/core/process.py
+index 729858c..865fffb 100644
+--- a/backend/app/core/process.py
++++ b/backend/app/core/process.py
+@@ -35,18 +35,71 @@ class RunningProcess:
+         self.is_running = False
+         self.stats = {"cpu": 0, "ram": 0}
+         self.has_error = False
+-        self.alert_level = "normal" # normal, warning, critical
++        self.alert_level = "normal" # normal, warning, critical, stopping
++        # [v13.17] ???嚗Ⅱ靽?stop() ?芸銵?甈?+        self._stop_requested = False
+         # Metrics History (v11.0) - 靽??敺?300 ?見??(~5-10 ??)
+         self.cpu_history: Deque[float] = deque(maxlen=300)
+         self.ram_history: Deque[float] = deque(maxlen=300)
+ 
+-    async def start(self, cmd: str, env: dict):
++    async def wait_for_port(self, port: int, timeout: float = 30.0) -> bool:
++        """
++        [v13.26] 蝑??? port ?舫?嚗ealth Check嚗?+        
++        Args:
++            port: 閬炎?亦? port
++            timeout: ?憭抒?敺???蝘?
++            
++        Returns:
++            True 憒? port ?舫?嚗alse 憒?頞?
++        """
++        import socket
++        import time
++        
++        start_time = time.time()
++        check_interval = 0.5
++        
++        while time.time() - start_time < timeout:
++            # 瑼Ｘ?臬鋡怨?瘙?甇?+            if self._stop_requested:
++                return False
++                
++            try:
++                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
++                sock.settimeout(1.0)
++                result = sock.connect_ex(('127.0.0.1', port))
++                sock.close()
++                
++                if result == 0:
++                    # Port ?舫?嚗?+                    try:
++                        with open("lifecycle_debug.log", "a", encoding="utf-8") as f:
++                            import datetime
++                            elapsed = time.time() - start_time
++                            f.write(f"[{datetime.datetime.now().strftime('%H:%M:%S.%f')[:-3]}] HEALTH_CHECK_OK: {self.name} port {port} ready in {elapsed:.1f}s\n")
++                    except: pass
++                    return True
++            except Exception:
++                pass
++                
++            await asyncio.sleep(check_interval)
++        
++        # 頞?
++        try:
++            with open("lifecycle_debug.log", "a", encoding="utf-8") as f:
++                import datetime
++                f.write(f"[{datetime.datetime.now().strftime('%H:%M:%S.%f')[:-3]}] HEALTH_CHECK_TIMEOUT: {self.name} port {port} not ready after {timeout}s\n")
++        except: pass
++        return False
++
++    async def start(self, cmd: str, env: dict, health_check_port: int = None):
+         """
+         ?唳郊??摮脩??? 
+         Args:
+             cmd (str): 閬銵??賭誘摮泵銝脯?             env (dict): ?啣?霈?摮??+            health_check_port (int): ?舫嚗?敺迨 port ?舫??身蝵?is_running=True
+         """
+         try:
+             import subprocess
+@@ -59,9 +112,42 @@ class RunningProcess:
+                 # Windows ?孵?嚗撱箸?脩?蝯誑靘踵銝雿萇?甇Ｗ??脩?
+                 creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == 'nt' else 0
+             )
+-            self.is_running = True
+-            # ???亥?霈??鞈???隞餃?
++            
++            # [v13.18] 蝡嗆?璇辣靽風嚗?? start ?瑁??? stop 撌脰◤隤輻嚗??喟?甇?+            if self._stop_requested:
++                logger.info(f"ABORTED START: {self.name} was stopped before start completed. Killing...")
++                try:
++                    with open("process_debug.log", "a", encoding="utf-8") as f:
++                        import datetime
++                        f.write(f"[{datetime.datetime.now()}] ABORTED START: {self.name} (PID: {self.process.pid}) - killed before start completed\n")
++                except: pass
++                self.process.kill()
++                return
++            
++            # ???隤????見?臭誑???????log嚗?             asyncio.create_task(self.read_logs())
++            
++            # [v13.26] Health Check嚗?敺?port ?舫?
++            if health_check_port:
++                logger.info(f"Waiting for {self.name} port {health_check_port} to be ready...")
++                port_ready = await self.wait_for_port(health_check_port)
++                
++                if self._stop_requested:
++                    return  # 鋡思葉??+                    
++                if port_ready:
++                    self.is_running = True
++                    self.alert_level = 'normal'
++                else:
++                    # 頞?嚗??霈?嗅隞交?雿?+                    self.is_running = True
++                    self.alert_level = 'warning'
++                    logger.warning(f"{self.name} port {health_check_port} not ready after timeout, but process is running")
++            else:
++                # 瘝? health check port嚗?亥身蝵桃??銝?+                self.is_running = True
++            
++            # ??鞈???
+             asyncio.create_task(self.monitor_resources())
+             logger.info(f"Started managed process for {self.name} (PID: {self.process.pid})")
+         except Exception as e:
+@@ -99,13 +185,15 @@ class RunningProcess:
+                     }
+                     
+                     # [v12.0] ?曉潸郎?梁頂蝯?-                    new_alert = "normal"
+-                    if self.stats["cpu"] > 80 or self.stats["ram"] > 1024:
+-                        new_alert = "warning"
+-                    if self.stats["cpu"] > 95 or self.stats["ram"] > 2048:
+-                        new_alert = "critical"
+-                    
+-                    self.alert_level = new_alert
++                    # [v13.16] Fix Flicker: Do not overwrite 'stopping' state
++                    if not self._stop_requested and self.alert_level != "stopping":
++                        new_alert = "normal"
++                        if self.stats["cpu"] > 80 or self.stats["ram"] > 1024:
++                            new_alert = "warning"
++                        if self.stats["cpu"] > 95 or self.stats["ram"] > 2048:
++                            new_alert = "critical"
++                        
++                        self.alert_level = new_alert
+ 
+                     # ?湔甇瑕閮?
+                     self.cpu_history.append(self.stats["cpu"])
+@@ -141,10 +229,15 @@ class RunningProcess:
+         logger.info(f"Log reader started for {self.name} (PID: {self.process.pid})")
+         error_keywords = ['error', 'failed', 'exception', 'critical', 'err:', 'fatal']
+         
+-        while self.is_running:
++        # [v13.26] ?迂??starting ???蝜潛?霈??log嚗?敺?health check嚗?+        while self.is_running or self.alert_level == 'starting':
+             try:
+                 line = await self.process.stdout.readline()
+                 if not line:
++                    # [v13.26] 憒??脩?? starting嚗?銝銝?閰?+                    if self.alert_level == 'starting' and not self._stop_requested:
++                        await asyncio.sleep(0.1)
++                        continue
+                     logger.info(f"Log stream reached EOF for {self.name}")
+                     break
+                 
+@@ -177,10 +270,15 @@ class RunningProcess:
+                 logger.error(f"Error reading logs for {self.name}: {e}")
+                 break
+         
+-        # [v13.11] Nuclear Safety: If log reader stops, process MUST stop.
+-        # This prevents "Zombie" processes where backend loses track but process stays alive.
+-        logger.info(f"Log stream ended for {self.name}. Terminating process tree...")
+-        self.stop() 
++        # [v13.17] ????斗嚗蝙??_stop_requested ?????甇?vs ?????+        # [v13.26] 憿?瑼Ｘ嚗?????starting ???銝?閰脰孛??stop嚗ealth check ??摰?嚗?+        if not self._stop_requested and self.alert_level != 'starting':
++            logger.info(f"Log stream ended unexpectedly for {self.name}. Cleaning up...")
++            self.stop()
++        elif self._stop_requested:
++            logger.info(f"Log stream ended for {self.name} (manual stop).")
++        else:
++            logger.info(f"Log stream ended for {self.name} during health check - waiting.") 
+         
+         await self.connection_manager.broadcast({
+             "type": "log_status",
+@@ -189,50 +287,75 @@ class RunningProcess:
+             "status": "stopped"
+         })
+ 
++    async def wait_for_death(self, timeout=5.0):
++        """
++        [v13.13] Strict Lifecycle Verification
++        蝑??脩??迤敺?OS 銝剜?憭晞?+        """
++        if not self.process: return True
++        
++        pid = self.process.pid
++        import time
++        start = time.time()
++        
++        while time.time() - start < timeout:
++            if not psutil.pid_exists(pid):
++                return True
++            await asyncio.sleep(0.1)
++            
++        logger.warning(f"Process {pid} refused to die after {timeout}s")
++        return False
++
+     def stop(self):
+         """
+         ?迫?脩??????脩???+        [v13.21] 靽桀儔嚗?閮勗?甈∟矽?剁?瘥活?賢?閰衣?甇ａ脩???         """
+-        if self.process:
++        # [v13.22] 閰喟敦餈質馱
++        try:
++            with open("lifecycle_debug.log", "a", encoding="utf-8") as f:
++                import datetime
++                f.write(f"[{datetime.datetime.now().strftime('%H:%M:%S.%f')[:-3]}] STOP(): {self.name} | process={self.process} | pid={self.process.pid if self.process else 'None'} | is_running={self.is_running}\n")
++        except: pass
++
++        # 璅??迫隢?嚗? start() ??abort ?摩雿輻嚗?+        self._stop_requested = True
++        self.is_running = False
++        
++        # 憒??脩?撠情嚗銵?甇?+        if self.process and self.process.pid:
+             pid = self.process.pid
+             try:
+                 # [Debug] Log Stop Attempt
+                 try:
+-                    with open("process_debug.log", "a", encoding="utf-8") as f:
++                    with open("lifecycle_debug.log", "a", encoding="utf-8") as f:
+                         import datetime
+-                        f.write(f"[{datetime.datetime.now()}] STOP REQUEST: {self.name} (PID: {pid})\n")
++                        f.write(f"[{datetime.datetime.now().strftime('%H:%M:%S.%f')[:-3]}] TASKKILL: {self.name} (PID: {pid})\n")
+                 except: pass
+ 
+-                # [v13.?] Force Kill for Windows to prevent Zombies
++                # [v13.13] Nuclear Kill with Verification Support
+                 if os.name == 'nt':
+                      import subprocess
+-                     # Add capture_output to see errors
+-                     res = subprocess.run(f"taskkill /F /T /PID {pid}", shell=True, capture_output=True, text=True)
+-                     
+-                     # [Debug] Log Kill Result
+-                     try:
+-                        with open("process_debug.log", "a", encoding="utf-8") as f:
+-                            f.write(f"  -> Taskkill Return: {res.returncode}\n")
+-                            f.write(f"  -> Stdout: {res.stdout.strip()}\n")
+-                            f.write(f"  -> Stderr: {res.stderr.strip()}\n")
+-                     except: pass
++                     subprocess.run(f"taskkill /F /T /PID {pid}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                 else:
+                     # Unix-like cleanup
+-                    parent = psutil.Process(pid)
+-                    for child in parent.children(recursive=True):
+-                        child.kill()
+-                    parent.kill()
++                    try:
++                        parent = psutil.Process(pid)
++                        for child in parent.children(recursive=True):
++                            child.kill()
++                        parent.kill()
++                    except psutil.NoSuchProcess:
++                        pass
+             except (psutil.NoSuchProcess, psutil.AccessDenied):
+-                 # [Debug] Log Already Dead
+-                try:
+-                    with open("process_debug.log", "a", encoding="utf-8") as f:
+-                        f.write(f"  -> Process already dead (NoSuchProcess/AccessDenied)\n")
+-                except: pass
+                 pass
+             except Exception as e:
+                 logger.error(f"Stop process {self.name} failed: {e}")
+-                try:
+-                    with open("process_debug.log", "a", encoding="utf-8") as f:
+-                        f.write(f"  -> EXCEPTION: {e}\n")
+-                except: pass
+-            self.is_running = False
++        else:
++            # ?脩????萄遣嚗?舀?閮?甇Ｙ???+            try:
++                with open("lifecycle_debug.log", "a", encoding="utf-8") as f:
++                    import datetime
++                    f.write(f"[{datetime.datetime.now().strftime('%H:%M:%S.%f')[:-3]}] STOP_SKIP: {self.name} - no process to kill\n")
++            except: pass
++            logger.info(f"Stop requested for {self.name} but process not yet created (will abort on start)")
++
+diff --git a/backend/app/core/project_manager.py b/backend/app/core/project_manager.py
+index 50e8e23..d069860 100644
+--- a/backend/app/core/project_manager.py
++++ b/backend/app/core/project_manager.py
+@@ -46,12 +46,20 @@ class ProjectManager:
+         
+         self.self_path = self._normalize_path(str(Path(__file__).parents[3]))
+         self.db_manager = DatabaseManager()
++        # [v13.15] Async Mutex Locks for Project Operations
++        # ?脫迫????撠??蒂??Start/Stop 撠??奎??+        self.project_locks: Dict[str, asyncio.Lock] = {}
+         psutil.cpu_percent(interval=None)
+ 
+     def _normalize_path(self, path: str) -> str:
+         if not path: return ""
+         return os.path.abspath(path).lower().replace("\\", "/")
+ 
++    def get_lock(self, path: str) -> asyncio.Lock:
++        if path not in self.project_locks:
++            self.project_locks[path] = asyncio.Lock()
++        return self.project_locks[path]
++
+     def start_watcher(self):
+         loop = asyncio.get_running_loop()
+         self.event_handler = DebouncedEventHandler(
+@@ -271,9 +279,12 @@ class ProjectManager:
+         return res
+ 
+     async def notify_clients(self, patch_path: str = None, force_metrics_paths: set = None):
+-        # [v13.7] 撱???蝘駁撌脩??迫?脩?撠情 (Zombie Cleanup)
+-        # Iterate over a copy to allow modification
+-        stopped_paths = [path for path, proc in self.active_processes.items() if not proc.is_running]
++        # [v13.23] 靽桀儔嚗蝘駁?迤鋡?stop ???脩? (_stop_requested=True)
++        # ?踹?隤文???銝剔??脩? (is_running=False 雿?_stop_requested=False)
++        stopped_paths = [
++            path for path, proc in self.active_processes.items() 
++            if not proc.is_running and proc._stop_requested
++        ]
+         for path in stopped_paths:
+             if path != self.self_path: # 靽風?芣???
+                 del self.active_processes[path]
+@@ -322,57 +333,149 @@ class ProjectManager:
+     async def start_project(self, target_path: Path, trigger: str = "manual"):
+         n_path = self._normalize_path(str(target_path))
+         
+-        # [Debug] Trace Log
++        # [v13.15] Critical State Lock
++        async with self.get_lock(n_path):
++            # [v13.14] Strict State Lock (Anti-Race Condition)
++            # 憒?閰脣?獢迤?典?甇Ｖ葉嚗?撠?甇Ｗ????脫迫?迫??銝剔?蝡嗥隢?
++            if n_path in self.active_processes:
++                proc = self.active_processes[n_path]
++                if proc.alert_level == 'stopping':
++                    logger.warning(f"BLOCKED START: {n_path} is currently stopping. Trigger: {trigger}")
++                    return 
++
++            # [v13.22] 蝯曹???望?餈質馱
++            import traceback
++            try:
++                with open("lifecycle_debug.log", "a", encoding="utf-8") as f:
++                    import datetime
++                    f.write(f"[{datetime.datetime.now().strftime('%H:%M:%S.%f')[:-3]}] START_PROJECT: {n_path} | trigger={trigger}\n")
++            except: pass
++
++            logger.info(f"REQUEST START: {n_path} (Trigger: {trigger})")
++
++            if n_path == self.self_path: return
++
++            # [v13.24] ??銝剝霅瘀???瑼Ｘ is_running ??alert_level
++            if n_path in self.active_processes:
++                proc = self.active_processes[n_path]
++                if proc.is_running:
++                    logger.info(f"SKIP START: {n_path} is already running.")
++                    return
++                if proc.alert_level == 'starting':
++                    logger.info(f"SKIP START: {n_path} is already starting.")
++                    return
++
++            c_path = target_path / "config.md"
++            p_config = ConfigParser.parse_file(str(c_path)) if c_path.exists() else {}
++            deps = p_config.get('depends_on', [])
++
++            if deps:
++                for d_name in [d.strip() for d in deps]:
++                    dep_path = next((p for p, m in self.project_meta_cache.items() if m['name'].lower() == d_name.lower() or p == self._normalize_path(d_name)), None)
++                    if dep_path:
++                        # [v13.14] Dependency Loop Protection
++                        # ?脫迫 A -> B, B -> A ?⊿?敺芰??
++                        # ?芣??嗡?鞈湧?摰瘝??????
++                        is_run = dep_path in self.active_processes and self.active_processes[dep_path].is_running
++                        if not is_run:
++                            # Check recursively if dependency is stopping
++                             if dep_path in self.active_processes and self.active_processes[dep_path].alert_level == 'stopping':
++                                 logger.info(f"SKIP DEP START: {d_name} is stopping.")
++                                 continue
++                             
++                             logger.info(f"AUTO-START Dependency: {d_name} for {target_path.name}")
++                             # Recursive call will form its own lock check
++                             await self.start_project(Path(dep_path), trigger=f"dep_of_{target_path.name}")
++
++            proc = RunningProcess(n_path, target_path.name, self.connection_manager, db_manager=self.db_manager)
++            self.active_processes[n_path] = proc
++            abs_bat = os.path.abspath(os.path.join(str(target_path), "start.bat"))
++            if os.path.exists(abs_bat):
++                # [v13.19] 撱? starting ???霈?蝡舫?摰?switch
++                proc.alert_level = 'starting'
++                await self.connection_manager.broadcast({
++                    "type": "process_stats",
++                    "path": n_path,
++                    "stats": None,
++                    "alert_level": "starting",
++                    "history": {"cpu": [], "ram": []}
++                })
++                
++                # [v13.26] 敺?config ?? health check port
++                e_vars = ConfigParser.get_env_vars(str(c_path)) if c_path.exists() else {}
++                health_port = None
++                if p_config.get('explicit_ports'):
++                    health_port = p_config['explicit_ports'][0]['port']
++                    logger.info(f"Health check port for {target_path.name}: {health_port}")
++                
++                await proc.start(f'"{abs_bat}"', {**e_vars, "CI": "true"}, health_check_port=health_port)
++                # [v13.7] 蝡霈?翰?仃?蒂撱?
++                self.system_state_cache = None
++                asyncio.create_task(self.notify_clients(patch_path=n_path))
++
++    async def stop_project(self, path: Path) -> Dict[str, str]:
++        norm_path = self._normalize_path(str(path))
++        
++        # [v13.22] 閰喟敦餈質馱
+         try:
+-            with open("start_triggers.log", "a", encoding="utf-8") as f:
++            with open("lifecycle_debug.log", "a", encoding="utf-8") as f:
+                 import datetime
+-                f.write(f"[{datetime.datetime.now()}] START REQUEST: {n_path} | Trigger: {trigger}\n")
++                f.write(f"[{datetime.datetime.now().strftime('%H:%M:%S.%f')[:-3]}] STOP_PROJECT: norm_path={norm_path}\n")
++                f.write(f"  active_processes.keys() = {list(self.active_processes.keys())}\n")
++                f.write(f"  match = {norm_path in self.active_processes}\n")
+         except: pass
+-
+-        logger.info(f"REQUEST START: {n_path} (Trigger: {trigger})")
+-
+-        if n_path == self.self_path: return
+-
+-        # ??銝剝霅?-        if n_path in self.active_processes and self.active_processes[n_path].is_running: 
+-            logger.info(f"SKIP START: {n_path} is already running.")
+-            return 
+-
+-        c_path = target_path / "config.md"
+-        p_config = ConfigParser.parse_file(str(c_path)) if c_path.exists() else {}
+-        deps = p_config.get('depends_on', [])
+-
+-        if deps:
+-            for d_name in [d.strip() for d in deps]:
+-                dep_path = next((p for p, m in self.project_meta_cache.items() if m['name'].lower() == d_name.lower() or p == self._normalize_path(d_name)), None)
+-                if dep_path:
+-                    is_run = dep_path in self.active_processes and self.active_processes[dep_path].is_running
+-                    if not is_run:
+-                        logger.info(f"AUTO-START Dependency: {d_name} for {target_path.name}")
+-                        await self.start_project(Path(dep_path), trigger=f"dep_of_{target_path.name}")
+-
+-        proc = RunningProcess(n_path, target_path.name, self.connection_manager, db_manager=self.db_manager)
+-        self.active_processes[n_path] = proc
+-        abs_bat = os.path.abspath(os.path.join(str(target_path), "start.bat"))
+-        if os.path.exists(abs_bat):
+-            e_vars = ConfigParser.get_env_vars(str(c_path)) if c_path.exists() else {}
+-            await proc.start(f'"{abs_bat}"', {**e_vars, "CI": "true"})
+-            # [v13.7] 蝡霈?翰?仃?蒂撱?
++        
++        # [v13.15] Critical State Lock
++        async with self.get_lock(norm_path):
++            if norm_path in self.data_cache: del self.data_cache[norm_path]
+             self.system_state_cache = None
+-            asyncio.create_task(self.notify_clients(patch_path=n_path))
+ 
+-    def stop_project(self, path: Path) -> Dict[str, str]:
+-        norm_path = self._normalize_path(str(path))
+-        if norm_path in self.data_cache: del self.data_cache[norm_path]
+-        self.system_state_cache = None
++            if norm_path == self.self_path: return {"status": "error", "message": "Self-Protection active."}
++            
++            if norm_path in self.active_processes:
++                proc = self.active_processes[norm_path]
++                
++                # [v13.24] ???迫?脰風
++                if proc.alert_level == 'stopping':
++                    logger.info(f"SKIP STOP: {norm_path} is already stopping.")
++                    return {"status": "skipped", "message": "Already stopping."}
++                
++                # 1. 撱? "Stopping" ???+                proc.alert_level = 'stopping'
++                await self.connection_manager.broadcast({
++                     "type": "process_stats",
++                     "path": norm_path,
++                     "stats": proc.stats,
++                     "alert_level": "stopping",
++                     "history": {"cpu": list(proc.cpu_history), "ram": list(proc.ram_history)}
++                })
++                
++                # 2. ?瑁??迫 (閫貊 taskkill)
++                proc.stop()
++                
++                # 3. [v13.13] 撘瑕蝑?銝阡?霅脩?甇颱滿
++                is_dead = await proc.wait_for_death()
++                
++                if is_dead:
++                    # Double check if it's still there (race condition safety)
++                    if norm_path in self.active_processes:
++                        del self.active_processes[norm_path]
++                    
++                    await self.connection_manager.broadcast({
++                        "type": "log_status", "project": proc.name, "path": proc.project_path, "status": "stopped"
++                    })
++                    await self.notify_clients() # ?典??瑟
++                    return {"status": "success", "message": "Stopped."}
++                else:
++                    # [v13.25] ?喃蝙?脩?瘝香??銋?敺?active_processes 蝘駁
++                    # ?見?冽?臭誑?岫??嚗askkill 撌脩??瑁???嚗?+                    if norm_path in self.active_processes:
++                        del self.active_processes[norm_path]
++                    
++                    await self.connection_manager.broadcast({
++                        "type": "log_status", "project": proc.name, "path": proc.project_path, "status": "stopped"
++                    })
++                    await self.notify_clients()
++                    return {"status": "warning", "message": "Process may still be running (zombie). Retry if needed."}
+ 
+-        if norm_path == self.self_path: return {"status": "error", "message": "Self-Protection active."}
+-        if norm_path in self.active_processes:
+-            proc = self.active_processes[norm_path]
+-            proc.stop()
+-            asyncio.create_task(self.connection_manager.broadcast({
+-                "type": "log_status", "project": proc.name, "path": proc.project_path, "status": "stopped"
+-            }))
+-            asyncio.create_task(self.notify_clients())
+-            return {"status": "success", "message": "Stopped."}
+-        return {"status": "not_running", "message": "Not running."}
++            return {"status": "not_running", "message": "Not running."}
+diff --git a/backend/app/utils/lifecycle_logger.py b/backend/app/utils/lifecycle_logger.py
+new file mode 100644
+index 0000000..5fa6f4f
+--- /dev/null
++++ b/backend/app/utils/lifecycle_logger.py
+@@ -0,0 +1,28 @@
++"""
++?脩???望?餈質馱??+?冽餈質馱 start/stop ???湔?蝔?+"""
++import datetime
++from pathlib import Path
++
++LOG_FILE = Path(__file__).parent.parent.parent.parent / "lifecycle_debug.log"
++
++def log(source: str, action: str, path: str, details: str = ""):
++    """閮???望?鈭辣"""
++    try:
++        with open(LOG_FILE, "a", encoding="utf-8") as f:
++            timestamp = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
++            f.write(f"[{timestamp}] [{source}] {action}: {path}")
++            if details:
++                f.write(f" | {details}")
++            f.write("\n")
++    except:
++        pass
++
++def clear_log():
++    """皜 log 瑼?"""
++    try:
++        with open(LOG_FILE, "w", encoding="utf-8") as f:
++            f.write(f"=== Lifecycle Debug Log Started at {datetime.datetime.now()} ===\n")
++    except:
++        pass
+diff --git a/dummy_service/start.bat b/dummy_service/start.bat
+index f760fc0..f789ee2 100644
+--- a/dummy_service/start.bat
++++ b/dummy_service/start.bat
+@@ -1,6 +1,5 @@
+ @echo off
+ echo [DummyService] Starting...
+ echo [DummyService] Running...
+-:: Use timeout for stable waiting (NOC mode compatible)
+-timeout /t 99999 /nobreak > nul
+-echo [DummyService] Stopped.
++echo [DummyService] Starting python server...
++python server.py
+diff --git a/frontend/src/components/ProjectCard.vue b/frontend/src/components/ProjectCard.vue
+index 7c8fa41..fcec80d 100644
+--- a/frontend/src/components/ProjectCard.vue
++++ b/frontend/src/components/ProjectCard.vue
+@@ -121,16 +121,25 @@ function formatSize(bytes?: number): string {
+             <!-- Dev Switch (v10.5) -->
+             <div v-if="project.hasStartBat" class="flex items-center space-x-2 px-2.5 py-1.5 rounded-lg bg-surface/50 border border-white/5 shadow-sm shrink-0">
+                 <span class="text-[9px] font-black uppercase tracking-widest text-secondary/60">Dev</span>
++                <!-- [v13.19] ??銝剔?????switch -->
++                <!-- [v13.27] ?迫銝剔?????switch 銝阡＊蝷箇??-->
+                 <button 
+                     @click="toggleDev(project)"
+-                    class="relative inline-flex h-3.5 w-7 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
+-                    :class="project.process?.is_running ? 'bg-success/50' : 'bg-white/10'"
++                    :disabled="project.process?.alert_level === 'starting' || project.process?.alert_level === 'stopping'"
++                    class="relative inline-flex h-3.5 w-7 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
++                    :class="[
++                        project.process?.alert_level === 'starting' ? 'bg-warning/50 animate-pulse cursor-not-allowed' :
++                        project.process?.alert_level === 'stopping' ? 'bg-danger/50 animate-pulse cursor-not-allowed' :
++                        project.process?.is_running ? 'bg-success/50 cursor-pointer' : 'bg-white/10 cursor-pointer'
++                    ]"
+                 >
+                     <span 
+                         class="pointer-events-none inline-block h-2.5 w-2.5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
+-                        :class="project.process?.is_running ? 'translate-x-3.5' : 'translate-x-0'"
++                        :class="(project.process?.is_running && project.process?.alert_level !== 'stopping') || project.process?.alert_level === 'starting' ? 'translate-x-3.5' : 'translate-x-0'"
+                     />
+                 </button>
++                <span v-if="project.process?.alert_level === 'starting'" class="text-[8px] text-warning animate-pulse font-bold">Starting...</span>
++                <span v-else-if="project.process?.alert_level === 'stopping'" class="text-[8px] text-danger animate-pulse font-bold">Stopping...</span>
+             </div>
+ 
+             <button 
+diff --git a/frontend/src/composables/useProjectActions.ts b/frontend/src/composables/useProjectActions.ts
+index 45e84ae..c2b8598 100644
+--- a/frontend/src/composables/useProjectActions.ts
++++ b/frontend/src/composables/useProjectActions.ts
+@@ -89,6 +89,9 @@ export function useProjectActions() {
+     async function toggleDev(project: Project) {
+         if (actionCooldown.value) return
+         
++        // [v13.19] ????銝剜?蝳迫??
++        if (project.process?.alert_level === 'starting') return
++        
+         actionCooldown.value = true
+         setTimeout(() => actionCooldown.value = false, 1000)
+ 
+@@ -103,6 +106,10 @@ export function useProjectActions() {
+                 cancelButtonText: 'Cancel'
+             })
+             if (result.isConfirmed) {
++                // [v13.27] Optimistic UI: Immediately show stopping state
++                if (project.process) {
++                    project.process.alert_level = 'stopping'
++                }
+                 handleAction('stop', project.path)
+             }
+         } else {
+diff --git a/frontend/src/stores/projectStore.ts b/frontend/src/stores/projectStore.ts
+index 846d228..0fdbcbd 100644
+--- a/frontend/src/stores/projectStore.ts
++++ b/frontend/src/stores/projectStore.ts
+@@ -68,7 +68,7 @@ export interface Project {
+     stats?: { cpu: number; ram: number } | null;
+     history?: { cpu: number[]; ram: number[] };
+     has_error: boolean;
+-    alert_level?: 'normal' | 'warning' | 'critical';
++    alert_level?: 'normal' | 'warning' | 'critical' | 'starting' | 'stopping';
+   };
+   isExpanded?: boolean;
+ }
+@@ -190,8 +190,12 @@ export const useProjectStore = defineStore('project', () => {
+         const project = projects.value.find(p => p.path === path)
+         if (project) {
+           if (!project.process) project.process = { is_running: true, stats: null, has_error: false }
+-          project.process.is_running = true
+-          project.process.stats = data.stats
++          // [v13.19] ?? starting ???stats ?航??null
++          if (data.alert_level !== 'starting') {
++            project.process.is_running = true
++            project.process.stats = data.stats
++          }
++          project.process.alert_level = data.alert_level
+           project.process.history = data.history
+         }
+       } else if (data.type === 'process_error') {
+diff --git a/plan.md b/plan.md
+index dbee10c..7b24b8a 100644
+--- a/plan.md
++++ b/plan.md
+@@ -1,83 +1,28 @@
+-# TaskMancer ?澆?閬?
+-
+-## v7.5 - Explicit Config: 蝎曄Ⅱ?摰儔 (撌脣???
+-- [x] `config.md` 閫????蝢拙?璅惜??-
+-## v8.0 - Dynamic Orchestration: ??蝺冽? (撌脣???
+-- [x] 撠?`config.md` 摰儔??Port 瘜典?箇憓???(`TM_PORT_[LABEL]`)??-- [x] 霈?`start.bat` ?賢?????霈??-
+-## v9.0 - README UI Redesign (撌脣???
+-- [x] ???辣憿舐內??閫摨西??梯?擃???-
+-## v9.2 - Port Visibility Fix (撌脣???
+-- [x] 霈?Port 憿舐內銝?靘陷??`config.md`??-- [x] 蝣箔??函???賢??? UI 銝?-## v9.3 - Accurate Port Detection (撌脣???
+-- [x] 蝘駁?典????嚗???＊蝷箏??其?鞈?`config.md`??-## v9.4 - Scanner Robustness (撌脣???
+-- [x] 憓撥 `config.md` 閫??摰寥??-- [x] 蝣箔? `PortScanner` ??Windows ?啣?銝?蝛拙??扼?-## v9.5 - Hotfix (撌脣???
+-- [x] 閫?捱 DNS 閫??撠??韏瑕?憿?-## v9.6 - Stability (撌脣???
+-- [x] ?脫迫?桐?撠??航炊撠敺垢撏拇蔑??-## v9.7 - Protocol Support (撌脣???
+-- [x] 蝣箔??賣迤蝣箏皜?IPv6 ? (Vite default).
+-## v9.8 - Persistence Fix (撌脣???
+-- [x] 撖虫? `startup` event handler ?芸?頛撠???-## v9.9 - UI Layout (撌脣???
+-## v9.10 - UI Layout Optimization (撌脣???
+-- [x] ?? Git 鞈????航?撖砍漲嚗???閬箇絞銝??-## v9.11 - UI Readability Optimization (撌脣???
+-- [x] ?券??雿?瘥漲???漁摨佗?蝣箔??冽楛?脰??臭?靘皜??-## v9.12 - Extreme Readability & High Contrast (撌脣???
+-- [x] 鈭活隤踵?函???摨虫??賂?蝣箔??????擃霈?扼?-## v10.0.0 - The Convergence (撌脣???
+-- [x] 甇???潸” v10 ?嚗恐??UI ?漱鈭?頛舐帘摰?-
+-## v10.1 - AI Workflow (撌脣???
+-- [x] 撘 `.agent/workflows` ?芸???祆?氬?-- [x] 撱箇?敹急 Commit Workflow (`/commit`)??-
+-## v10.2 - Performance (撌脣???
+-- [x] ?雿喳????嚗宏?方???LOC 霈??頛胯?-
+-## v10.3 - Intelligence Hub (撌脣???
+-- [x] 撖虫? Web Console ??Metrics 敹怠???-
+-## v10.4 - Intelligence Orchestrator (撌脣???
+-- [x] ANSI 憿閫???隤恣??-- [x] ?脩?鞈??? (CPU/RAM) ?撣貊?扼?-- [x] ?典??脩??銵冽??-
+-## v10.6 - Dynamic View Switching (撌脣???
+-- [x] ?瘞游像??銝之撠璅∪? (List/Grid/Monitor)??-
+-## v11.0 - Intelligence & Tagging (撌脣???
+-- [x] ?脩?鞈?甇瑕?豢?餈質馱??SVG Sparkline 皜脫???-- [x] ?刻??銵ㄖ?菜葫璅惜??hashtag ?蕪?具?-
+-## v11.1 - Command Center UX (撌脣???
+-- [x] 瘞游像? NOC ??璅∪???-- [x] ?典??箇?閮剜鞈??????-- [x] ???Ｘ?芸?皛曉???瘥漲隤踹??-
+-## v11.2 - Self-Observability (撌脣???
+-- [x] TaskMancer ?? PID ????蝡舀隤?摰???-- [x] Dashboard 撠?鞈?蝮質???(Sum-Only mode)??-- [x] ?券頝臬?璅??? Windows 憭批?撖怎摰嫣耨敺押?-
+-## v12.0 - Industrial Infrastructure (撌脣???
+-- [x] SQLite ????Log ??Metrics 甇瑕????-- [x] Delta Updates ?降嚗扔蝺?WebSocket ??芸???-- [x] ?亥?皜脫????閫?捱擃?亥?銝? DOM 憯?????-- [x] ?箄霅血嚗皜祈?皞撣訾??其蒂閫貊閬死????-
+-## v12.2 - DevOps Infrastructure (撌脣???
+-- [x] ?? `StopTaskMancer.bat`嚗Ⅱ靽??舀??敺孵?皜?銝???-
+-## v13.5 - Reliability & Smart Sync (撌脣???
+-- [x] ??????-- [x] ?刻楝敺?皞?????雿萄?霅?(Patch Merge)??-- [x] 靘陷????扯??單????芸???+# Implementation Plan - Stopping Visual Effect
++
++## Goal Description
++Add a visual "Stopping..." indicator with an animation effect to the Project Card's Dev Switch when a service is in the process of stopping. This mirrors the existing "Starting..." effect.
++
++## User Review Required
++None.
++
++## Proposed Changes
++
++### Frontend
++#### [MODIFY] [ProjectCard.vue](file:///d:/Dev/TaskMancer/frontend/src/components/ProjectCard.vue)
++- Update the Dev Switch button:
++    - Disable the button when `alert_level` is `'stopping'`.
++    - Apply a pulsing red background (`bg-danger/50 animate-pulse`) when stopping.
++- Add a text label "Stopping..." next to the switch, visible only when `alert_level` is `'stopping'`.
++
++## Verification Plan
++### Manual Verification
++1. Open TaskMancer.
++2. Start the `dummy_service`.
++3. Wait for it to be fully running (Green/Live).
++4. Click the Dev Switch to stop it.
++5. **Verify**:
++    - The switch becomes disabled.
++    - The switch background pulses red.
++    - The text "Stopping..." appears next to the switch.
++    - After the process stops, the switch returns to the off state (gray) and the text disappears.
+diff --git a/task.md b/task.md
+index f81a2d8..1a016ad 100644
+--- a/task.md
++++ b/task.md
+@@ -127,8 +127,6 @@
+ - [x] ??敺垢 `PortScanner` ????冽???(COMMON_DEV_PORTS)
+ - [x] 蝣箔?蝎曄Ⅱ憿舐內撌脣?蝢拍????? 
+-[Link]: https://github.com/Ericechen/TaskMancer
+-
+ ## v9.4 - Bug Fix (?蔭閫??????撘? (撌脣???
+ - [x] ?芸? `config_parser` 甇??銵券?撘??舀?游祝擛?隤?
+ - [x] 憓撥 `PortScanner` ????賢? (Localhost ?芸? + Timeout ?曉祝)
+@@ -137,7 +135,7 @@
+ ## v9.5 - Hotfix (?Ｗ儔 127.0.0.1 ??) (撌脣???
+ - [x] 靽格迤 `live_utils.py`: ?Ｗ儔雿輻 IP ?湧??閫?捱 Windows Localhost 閫??撠??API ?⊥香??
+ - [x] 蝣箔??垢?賣迤蝣箇??蝡航???- 
++
+  ## v9.6 - Stability (?典??啣虜?脰風) (撌脣???
+  - [x] `main.py`: 撖虫? `scan_root` 撅斤??撣賊??ｇ??脫迫?桐?撠?閫??憭望?撠 WebSocket ?瑞?
+  - [x] `asyncio.gather`: ? `return_exceptions=True` ?踹? Root ??撏拇蔑
+@@ -273,4 +271,10 @@
+ - [x] **Project Mutex**: 撘 `asyncio.Lock` ?箸???獢遣蝡蝡??仿?嚗撥?嗅??? start/stop ???? - [x] **Race Condition Fix**: 敺孵??脫迫??甇Ｖ葉???亙???蝡嗥???閫?捱鈭翰????撠??Action Failed ?悌撅脩??????? 
++## v13.16.0 - UI/UX Polish (?脰?銝?
++- [x] **Stop Flicker Fix**: 靽格迤 `monitor_resources` ?典?甇ａ?蝔葉閬神????渡? UI ???? (Off -> On -> Off)??+- [x] **Stop Flicker Fix**: 靽格迤 `monitor_resources` ?典?甇ａ?蝔葉閬神????渡? UI ???? (Off -> On -> Off)??+- [x] **Stopping Visual Effect**: 撖虫???甇Ｖ葉??閬箇??(蝝??澆 + Stopping... ??)??+- [x] **Optimistic UI Feedback**: 暺??迫???單葡?topping????瘨 1~2 蝘?蝬脩窗撱園??+
+ [Link]: https://github.com/Ericechen/TaskMancer
+diff --git a/taskmancer.db b/taskmancer.db
+index 631fe51..d45d0f8 100644
+Binary files a/taskmancer.db and b/taskmancer.db differ

@@ -69,15 +69,12 @@ async def run_project_action(request: CommandRequest):
     manager = get_project_manager()
     try:
         # [v13.22] 統一生命週期追蹤
-        try:
-            with open("lifecycle_debug.log", "a", encoding="utf-8") as f:
-                import datetime
-                import traceback
-                f.write(f"\n[{datetime.datetime.now().strftime('%H:%M:%S.%f')[:-3]}] API: {request.action} | {request.path}\n")
-                f.write("  Call stack:\n")
-                for line in traceback.format_stack()[-3:-1]:
-                    f.write(f"    {line.strip()}\n")
-        except: pass
+        # [v13.22] 統一生命週期追蹤
+        import traceback
+        from app.utils.lifecycle_logger import log as life_log
+        
+        stack = "".join(traceback.format_stack()[-3:-1]).strip().replace('\n', ' ; ')
+        life_log("API", f"{request.action}", request.path, f"Stack: {stack}")
 
         path = Path(request.path)
         if not path.exists() or not path.is_dir():

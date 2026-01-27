@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import type { Project } from '../stores/projectStore'
 import LogConsole from './LogConsole.vue'
 import ProjectGitInfo from './ProjectGitInfo.vue'
@@ -23,6 +23,32 @@ const {
     handleFileChange, 
     handleInfo 
 } = useProjectActions()
+
+// [v13.28] Refactor: Dev Switch UI Logic (Code Review Feedback)
+const switchButtonClass = computed(() => {
+    const proc = props.project.process
+    if (!proc) return 'bg-white/10 cursor-pointer'
+    
+    if (proc.alert_level === 'starting') return 'bg-warning/50 animate-pulse cursor-not-allowed'
+    if (proc.alert_level === 'stopping') return 'bg-danger/50 animate-pulse cursor-not-allowed'
+    if (proc.is_running) return 'bg-success/50 cursor-pointer'
+    
+    return 'bg-white/10 cursor-pointer'
+})
+
+const switchKnobClass = computed(() => {
+    const proc = props.project.process
+    // Default to 'off' (left) if no process
+    if (!proc) return 'translate-x-0'
+    
+    // Force 'Off' (left) position when stopping
+    if (proc.alert_level === 'stopping') return 'translate-x-0'
+    
+    // 'On' (right) position when starting OR running
+    if (proc.alert_level === 'starting' || proc.is_running) return 'translate-x-3.5'
+    
+    return 'translate-x-0'
+})
 
 function formatSize(bytes?: number): string {
     if (bytes === undefined) return '0 B'
@@ -127,15 +153,11 @@ function formatSize(bytes?: number): string {
                     @click="toggleDev(project)"
                     :disabled="project.process?.alert_level === 'starting' || project.process?.alert_level === 'stopping'"
                     class="relative inline-flex h-3.5 w-7 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
-                    :class="[
-                        project.process?.alert_level === 'starting' ? 'bg-warning/50 animate-pulse cursor-not-allowed' :
-                        project.process?.alert_level === 'stopping' ? 'bg-danger/50 animate-pulse cursor-not-allowed' :
-                        project.process?.is_running ? 'bg-success/50 cursor-pointer' : 'bg-white/10 cursor-pointer'
-                    ]"
+                    :class="switchButtonClass"
                 >
                     <span 
                         class="pointer-events-none inline-block h-2.5 w-2.5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
-                        :class="(project.process?.is_running && project.process?.alert_level !== 'stopping') || project.process?.alert_level === 'starting' ? 'translate-x-3.5' : 'translate-x-0'"
+                        :class="switchKnobClass"
                     />
                 </button>
                 <span v-if="project.process?.alert_level === 'starting'" class="text-[8px] text-warning animate-pulse font-bold">Starting...</span>

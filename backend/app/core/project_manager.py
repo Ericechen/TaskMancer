@@ -19,6 +19,7 @@ from app.parsers.config_parser import ConfigParser
 from app.utils.git_utils import GitHelper
 from app.utils.health_utils import get_project_health_report
 from app.utils.live_utils import get_live_report_async
+from app.utils.lifecycle_logger import log as life_log
 
 logger = logging.getLogger("TaskMancer.Manager")
 
@@ -330,8 +331,15 @@ class ProjectManager:
         state = await self.get_current_state(force_refresh=True) # Force refresh on global notify
         await self.connection_manager.broadcast(state)
 
-    async def start_project(self, target_path: Path, trigger: str = "manual"):
+    async def start_project(self, target_path: Path, trigger: str = "manual", visited: Set[str] = None):
         n_path = self._normalize_path(str(target_path))
+        
+        # [v13.28] Cycle Detection
+        if visited is None: visited = set()
+        if n_path in visited:
+            logger.info(f"Circular dependency detected (skipped): {n_path}")
+            return
+        visited.add(n_path)
         
         # [v13.15] Critical State Lock
         async with self.get_lock(n_path):
@@ -344,12 +352,7 @@ class ProjectManager:
                     return 
 
             # [v13.22] 統一生命週期追蹤
-            import traceback
-            try:
-                with open("lifecycle_debug.log", "a", encoding="utf-8") as f:
-                    import datetime
-                    f.write(f"[{datetime.datetime.now().strftime('%H:%M:%S.%f')[:-3]}] START_PROJECT: {n_path} | trigger={trigger}\n")
-            except: pass
+            life_log("PROJECT_MANAGER", f"START_PROJECT (trigger={trigger})", n_path)
 
             logger.info(f"REQUEST START: {n_path} (Trigger: {trigger})")
 
@@ -385,7 +388,7 @@ class ProjectManager:
                              
                              logger.info(f"AUTO-START Dependency: {d_name} for {target_path.name}")
                              # Recursive call will form its own lock check
-                             await self.start_project(Path(dep_path), trigger=f"dep_of_{target_path.name}")
+                             await self.start_project(Path(dep_path), trigger=f"dep_of_{target_path.name}", visited=visited)
 
             proc = RunningProcess(n_path, target_path.name, self.connection_manager, db_manager=self.db_manager)
             self.active_processes[n_path] = proc
@@ -417,13 +420,7 @@ class ProjectManager:
         norm_path = self._normalize_path(str(path))
         
         # [v13.22] 詳細追蹤
-        try:
-            with open("lifecycle_debug.log", "a", encoding="utf-8") as f:
-                import datetime
-                f.write(f"[{datetime.datetime.now().strftime('%H:%M:%S.%f')[:-3]}] STOP_PROJECT: norm_path={norm_path}\n")
-                f.write(f"  active_processes.keys() = {list(self.active_processes.keys())}\n")
-                f.write(f"  match = {norm_path in self.active_processes}\n")
-        except: pass
+        life_log("PROJECT_MANAGER", "STOP_PROJECT", norm_path, f"process_active={norm_path in self.active_processes}")
         
         # [v13.15] Critical State Lock
         async with self.get_lock(norm_path):
