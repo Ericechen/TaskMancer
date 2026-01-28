@@ -102,8 +102,6 @@
 - [x] Backend: 啟動專案時自動注入 `TM_PORT_[LABEL]` 環境變數
 - [x] Backend: `main.py` 支援 `--port` 參數接收動態埠口
 - [x] DevOps: 更新專案 `start.bat` 示範環璄變數動態接軌
-
-## v8.5 - Service Monitoring: 服務狀態燈號 (已完成)
 - [x] Backend: `PortScanner` 返回包含 `online/offline` 狀態的完整列表
 - [x] Frontend: `ProjectCard.vue` 實作狀態燈號 (綠色呼吸燈 = Online, 灰色 = Offline)
 
@@ -127,8 +125,6 @@
 - [x] 關閉後端 `PortScanner` 的全域備用掃描 (COMMON_DEV_PORTS)
 - [x] 確保精確顯示已定義的埠口狀態
 
-[Link]: https://github.com/Ericechen/TaskMancer
-
 ## v9.4 - Bug Fix (配置解析與掃描增強) (已完成)
 - [x] 優化 `config_parser` 正則表達式，支援更寬鬆的語法
 - [x] 增強 `PortScanner` 連線能力 (Localhost 優先 + Timeout 放寬)
@@ -137,7 +133,7 @@
 ## v9.5 - Hotfix (恢復 127.0.0.1 掃描) (已完成)
 - [x] 修正 `live_utils.py`: 恢復使用 IP 直連，解決 Windows Localhost 解析導致的 API 卡死問題
 - [x] 確保前端能正確獲取後端資料
- 
+
  ## v9.6 - Stability (全域異常防護) (已完成)
  - [x] `main.py`: 實作 `scan_root` 層級的異常隔離，防止單一專案解析失敗導致 WebSocket 斷線
  - [x] `asyncio.gather`: 啟用 `return_exceptions=True` 避免 Root 掃描崩潰
@@ -225,5 +221,66 @@
 - [x] **效能優化 (Memoization)**：使用 Computed Property 緩存依賴項狀態，優化 O(1) 渲染效能。
 - [x] **邏輯抽離**：將核心操作邏輯抽離至 `useProjectActions` Composable。
 - [x] **交互增強**：優化依賴項與連結的 UI 互動與智能標籤顯示。
+
+## v12.2.0 - DevOps Infrastructure (已完成)
+- [x] **StopTaskMancer.bat 升級**：實作遞迴進程樹終止邏輯與 ANSI 視覺化增強。
+
+## v13.0.0 - Desktop Integration (Tauri Tray) (已完成)
+- [x] **Tauri 2.0 基礎架構**：整合 Rust 後端與前端 Vue 構建。
+- [x] **系統托盤 (System Tray)**：實作 Windows 右下角托盤選單 (啟動、停止、開啟控制板)。
+- [x] **後端進程管理**：透過 Rust 控制 Python 後端生命週期。
+- [x] **簡易托盤介面**：實作 `TrayInterface.vue` 提供極簡控制面板。
+- [x] **智慧路由**：利用 URL 參數 (`?tray=true`) 實現托盤視窗專用介面。
+
+## v13.5.0 - Reliability & Smart Synchronization (已完成)
+- [x] **托盤選單強化**：新增「重新啟動 TaskMancer」選項，簡化開發流程。
+- [x] **路徑一致性標準化**：統一 Patch 與 Full State 路徑格式，解決 Windows 同步失效問題。
+- [x] **智能狀態合併 (Smart Merge)**：前端 Store 升級為增量合併模式，保留 UI 互動狀態（展開/日誌）。
+- [x] **依賴連動優化**：實現不分大小寫的依賴匹配與啟動後的標準化廣播，確保串流狀態即時化。
+- [x] **即時停止反饋**：點擊停止時立即更新 UI，消除背景進程清理的視覺延遲。
+
+## v13.8.0 - State Referential Integrity (已完成)
+- [x] **Frontend Refactor**: 將 `projectStore.ts` 重構為 In-Place Mutation 模式 (Object.assign)。
+- [x] **Identity Consistency**: 確保 Dashboard 與 ProjectCard 引用同一記憶體物件，解決不同步問題。
+- [x] **Reactivity Fix**: 修正 Vue 3 在物件替換時的反應性斷鏈問題。
+
+## v13.9.0 - Stability & Infrastructure (已完成)
+- [x] **Hotfix**: 修正 `watcher.py` 傳遞參數錯誤導致的 `TypeError`。
+- [x] **Service Reliability**: 修正 `dummy_service` 的 Ping 模擬邏輯，使其支援無限期運行 (`-n 99999`)。
+- [x] **State Integrity**: 徹底消除因 Watcher 報錯導致的後端狀態不一致問題。
+
+## v13.10.0 - Nuclear Termination (已完成)
+- [x] **Process Supervision**: 導入 Windows `taskkill /F /T` 強制終結機制，確保 `test_log_stream` 等 Batch 服務不會殘留殭屍進程。
+- [x] **Start Tracing**: 新增 `start_project` 觸發來源日誌 (`trigger=manual/dep`)，便於追蹤自動重啟原因。
+
+## v13.12.0 - UX Hardening (已完成)
+- [x] **Ghost Click Prevention**: 在前端 `toggleDev` 增加 1 秒冷卻機制 (Debounce)，防止雙擊或快速點擊導致的重複啟動請求。
+- [x] **Cleanup**: 移除所有臨時調試日誌。
+
+## v13.13.0 - Strict Confirmation Lifecycle (已完成)
+- [x] **Verification Loop**: 後端實現「停止即確認」機制 (`wait_for_death`)，在進程未完全從 OS 消失前不更新 UI。
+- [x] **State Awareness**: UI 狀態更新現在是嚴格傳導的 (Stopped -> Stopping -> Dead)，徹底解決假性停止問題。
+
+## v13.14.0 - State Lock Refactor (已完成)
+- [x] **Strict State Lock**: 重構 `ProjectManager`，在 `start_project` 導入強制鎖 (`stopping` 狀態下禁止啟動)，防止競爭條件導致的重啟迴圈。
+- [x] **Safe Dependency Logic**: 遞迴檢查依賴項狀態，若依賴項正在停止與卸載，則跳過自動啟動。
+
+## v13.15.0 - Serialized State Management (已完成)
+- [x] **Project Mutex**: 引入 `asyncio.Lock` 為每個專案建立獨立互斥鎖，強制序列化 start/stop 操作。
+- [x] **Race Condition Fix**: 徹底防止「停止中途插入啟動」的競爭狀態，解決了快速切換時導致的 Action Failed 或殭屍進程重啟問題。
+
+## v13.16.0 - UI/UX Polish (進行中)
+- [x] **Stop Flicker Fix**: 修正 `monitor_resources` 在停止過程中覆寫狀態導致的 UI 閃爍問題 (Off -> On -> Off)。
+- [x] **Stop Flicker Fix**: 修正 `monitor_resources` 在停止過程中覆寫狀態導致的 UI 閃爍問題 (Off -> On -> Off)。
+- [x] **Stopping Visual Effect**: 實作「停止中」視覺特效 (紅燈呼吸 + Stopping... 文字)。
+- [x] **Optimistic UI Feedback**: 點擊停止時立即渲染「Stopping」狀態，消除 1~2 秒的網絡延遲感。
+
+## v13.17.0 - Code Review & Analysis (已完成)
+- [x] **Code Reviewer Pro**: 執行 AI 代碼審核，分析潛在風險與優化空間，產出 `code_review_report.md`。
+
+## v13.18.0 - Stability & Performance Refactor (已完成)
+- [x] **Deadlock Protection**: 修復 `start_project` 中的遞迴鎖死問題，引入循環依賴偵測機制 (Visited Set)。
+- [x] **Logging Optimization**: 重構 `lifecycle_logger` 改用 Python 標準 `logging` 模組，移除所有阻塞式 I/O (`open` calls)。
+- [x] **Traceability**: 在 API 日誌中實作高效的 Stack Trace 格式化。
 
 [Link]: https://github.com/Ericechen/TaskMancer

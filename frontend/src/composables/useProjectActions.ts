@@ -83,7 +83,18 @@ export function useProjectActions() {
         }
     }
 
+    // [v13.12] Action Cooldown to prevent ghost clicks / rapid toggling
+    const actionCooldown = ref(false)
+
     async function toggleDev(project: Project) {
+        if (actionCooldown.value) return
+        
+        // [v13.19] 服務啟動中時禁止操作
+        if (project.process?.alert_level === 'starting') return
+        
+        actionCooldown.value = true
+        setTimeout(() => actionCooldown.value = false, 1000)
+
         const isRunning = project.process?.is_running;
         if (isRunning) {
             const result = await Swal.fire({
@@ -95,6 +106,10 @@ export function useProjectActions() {
                 cancelButtonText: 'Cancel'
             })
             if (result.isConfirmed) {
+                // [v13.27] Optimistic UI: Immediately show stopping state
+                if (project.process) {
+                    project.process.alert_level = 'stopping'
+                }
                 handleAction('stop', project.path)
             }
         } else {

@@ -1,0 +1,41 @@
+{
+  "scanner_D:\\Dev": {
+    "projects_found": 6,
+    "time_seconds": 0.017327070236206055,
+    "memory_mb": 22.21484375,
+    "avg_time_per_project": 0.0028878450393676758
+  },
+  "scanner_C:\\Python38": {
+    "projects_found": 0,
+    "time_seconds": 0.02522134780883789,
+    "memory_mb": 22.234375,
+    "avg_time_per_project": 0.02522134780883789
+  },
+  "parser_small": {
+    "file_lines": 100,
+    "time_seconds": 0.009692907333374023,
+    "memory_mb": 22.4453125,
+    "tasks_found": 75,
+    "time_per_line": 9.692907333374024e-05
+  },
+  "parser_medium": {
+    "file_lines": 1000,
+    "time_seconds": 0.06531643867492676,
+    "memory_mb": 23.046875,
+    "tasks_found": 750,
+    "time_per_line": 6.531643867492676e-05
+  },
+  "parser_large": {
+    "file_lines": 5000,
+    "time_seconds": 0.3401980400085449,
+    "memory_mb": 25.11328125,
+    "tasks_found": 3750,
+    "time_per_line": 6.803960800170899e-05
+  },
+  "cache_performance": {
+    "no_cache_time": 0.0,
+    "cache_time": 0.0,
+    "speedup": 0.0,
+    "tasks_count": 100
+  }
+}

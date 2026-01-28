@@ -7,6 +7,7 @@ const store = useProjectStore()
 
 // Aggregated Stats
 const totalProjects = computed(() => store.projects.length)
+const runningProjectsCount = computed(() => store.projects.filter(p => p.process?.is_running).length)
 const totalTasks = computed(() => store.projects.reduce((sum, p) => sum + p.stats.total, 0))
 const completedTasks = computed(() => store.projects.reduce((sum, p) => sum + p.stats.completed, 0))
 const globalProgress = computed(() => {
@@ -58,6 +59,16 @@ const system = computed(() => store.globalMetrics)
         <div class="h-10 w-[1px] bg-white/10 hidden md:block"></div>
 
         <div class="flex items-center space-x-12">
+            <div class="group">
+                <div class="flex items-center space-x-4 mb-2">
+                    <span class="text-[8px] text-secondary/60 uppercase font-black tracking-widest group-hover:text-warning transition-colors">Active Engines</span>
+                    <span class="text-xs font-mono font-bold text-warning">{{ runningProjectsCount }} UNIT(S)</span>
+                </div>
+                <div class="w-32 h-1 bg-white/5 rounded-full overflow-hidden">
+                    <div class="h-full bg-warning transition-all duration-1000" :style="{ width: `${totalProjects > 0 ? (runningProjectsCount / totalProjects) * 100 : 0}%` }"></div>
+                </div>
+            </div>
+
             <div class="group">
                 <div class="flex items-center space-x-4 mb-2">
                     <span class="text-[8px] text-secondary/60 uppercase font-black tracking-widest group-hover:text-accent transition-colors">CPU Utilization</span>

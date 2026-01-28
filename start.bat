@@ -11,19 +11,19 @@ echo  -----------------------------------
 echo.
 
 :: Step 1: Launch Backend
-echo [1/2] Launching Backend API...
+echo [1/2] Launching Backend API (Hidden)...
 if "%TM_PORT_BACKEND%"=="" set TM_PORT_BACKEND=8000
 
-:: v10.3: If managed (CI=true), use start /b to keep logs in current stdout
-set START_BACKEND=start "TM Backend" cmd /k
-if "%CI%"=="true" set START_BACKEND=start /b cmd /c
-
-IF EXIST ".venv\Scripts\activate.bat" (
-    %START_BACKEND% "title TM - Backend && call .venv\Scripts\activate && python backend/main.py --port %TM_PORT_BACKEND%"
-) ELSE (
-    echo [!] Virtual environment not found. Using global python...
-    %START_BACKEND% "python backend/main.py --port %TM_PORT_BACKEND%"
+:: Using VBS to launch backend without a window
+set BACKEND_CMD=python backend/main.py --port %TM_PORT_BACKEND%
+if exist ".venv\Scripts\activate.bat" (
+    set BACKEND_CMD=call .venv\Scripts\activate ^&^& python backend/main.py --port %TM_PORT_BACKEND%
 )
+
+:: Create and run a temporary VBS to hide the CMD window
+echo CreateObject("WScript.Shell").Run "cmd /c %BACKEND_CMD%", 0, False > %temp%\tm_backend.vbs
+wscript.exe %temp%\tm_backend.vbs
+del %temp%\tm_backend.vbs
 
 :: Step 2: Launch Frontend (Current Window)
 echo.

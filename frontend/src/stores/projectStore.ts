@@ -68,7 +68,7 @@ export interface Project {
     stats?: { cpu: number; ram: number } | null;
     history?: { cpu: number[]; ram: number[] };
     has_error: boolean;
-    alert_level?: 'normal' | 'warning' | 'critical';
+    alert_level?: 'normal' | 'warning' | 'critical' | 'starting' | 'stopping';
   };
   isExpanded?: boolean;
 }
@@ -120,15 +120,44 @@ export const useProjectStore = defineStore('project', () => {
 
     socket.onmessage = (event) => {
       const data = JSON.parse(event.data)
+      
       if (data.projects) {
-        projects.value = data.projects.map((p: any) => ({
-            ...p,
-            path: p.path.toLowerCase().replace(/\\/g, '/') // [v11.2] Standardize
-        }))
-        if (data.system) {
-            // Update total capacity one time or periodically
-            totalSystemRamMb.value = data.system.ram_total_gb * 1024
+        // [v13.8] Strict Referential Integrity: Mutate in place
+        const incomingMap = new Map()
+        data.projects.forEach((p: any) => {
+            const cleanPath = p.path.toLowerCase().replace(/\\/g, '/')
+            incomingMap.set(cleanPath, { ...p, path: cleanPath })
+        })
+
+        // 1. Update Existing & Add New
+        incomingMap.forEach((newData, path) => {
+            const existing = projects.value.find(p => p.path === path)
+            if (existing) {
+                // Update properties in place
+                Object.assign(existing, newData)
+                
+                // Deep merge process manually to preserve any internal Vue observers if specific refs were used
+                // But Object.assign on the reactive object is usually sufficient for deep reactivity in Vue 3
+                if (newData.process) {
+                   existing.process = existing.process || { is_running: false, stats: null, has_error: false }
+                   Object.assign(existing.process, newData.process)
+                }
+            } else {
+                projects.value.push(newData)
+            }
+        })
+
+        // 2. Remove Stale
+        for (let i = projects.value.length - 1; i >= 0; i--) {
+            if (!incomingMap.has(projects.value[i].path)) {
+                projects.value.splice(i, 1)
+            }
         }
+        
+        if (data.system) {
+          totalSystemRamMb.value = data.system.ram_total_gb * 1024
+        }
+
       } else if (data.type === 'log') {
         const path = data.path?.toLowerCase().replace(/\\/g, '/')
         if (path) {
@@ -141,59 +170,60 @@ export const useProjectStore = defineStore('project', () => {
             }
         }
       } else if (data.type === 'log_status') {
-          const index = projects.value.findIndex(p => p.path.toLowerCase() === data.path.toLowerCase())
-          if (index !== -1) {
-            const project = { ...projects.value[index] } as any
-            if (!project.process) {
-                project.process = { is_running: false, stats: null, has_error: false }
-            }
-            project.process.is_running = data.status === 'started' || data.status === 'running'
+          const dataPath = data.path.toLowerCase().replace(/\\/g, '/')
+          const project = projects.value.find(p => p.path === dataPath)
+          if (project) {
+            if (!project.process) project.process = { is_running: false, stats: null, has_error: false }
+            
             if (data.status === 'stopped') {
+                // [v13.8] In-place reset
                 project.process.is_running = false
                 project.process.stats = null
                 project.process.history = undefined
+                project.process.has_error = false
+            } else {
+                project.process.is_running = data.status === 'started' || data.status === 'running'
             }
-            projects.value[index] = project as any
           }
       } else if (data.type === 'process_stats') {
         const path = data.path?.toLowerCase().replace(/\\/g, '/')
-        const index = projects.value.findIndex(p => p.path === path)
-        if (index !== -1) {
-          const project = { ...projects.value[index] } as any
-          if (!project.process) {
-              project.process = { is_running: true, stats: data.stats, has_error: false, history: data.history }
-          } else {
-              project.process.stats = data.stats
-              project.process.is_running = true
-              project.process.history = data.history
+        const project = projects.value.find(p => p.path === path)
+        if (project) {
+          if (!project.process) project.process = { is_running: true, stats: null, has_error: false }
+          // [v13.19] 處理 starting 狀態：stats 可能為 null
+          if (data.alert_level !== 'starting') {
+            project.process.is_running = true
+            project.process.stats = data.stats
           }
-          projects.value[index] = project as any
+          project.process.alert_level = data.alert_level
+          project.process.history = data.history
         }
       } else if (data.type === 'process_error') {
         const path = data.path?.toLowerCase().replace(/\\/g, '/')
-        const index = projects.value.findIndex(p => p.path === path)
-        if (index !== -1) {
-          const project = { ...projects.value[index] } as any
-          if (!project.process) {
-              project.process = { is_running: true, stats: null, has_error: data.has_error }
-          } else {
-              project.process.has_error = data.has_error
-          }
-          projects.value[index] = project as any
+        const project = projects.value.find(p => p.path === path)
+        if (project) {
+          if (!project.process) project.process = { is_running: true, stats: null, has_error: false }
+          project.process.has_error = data.has_error
         }
       } else if (data.type === 'project_patch') {
-          // [v12.0] Delta Update
-          const p = data.project
-          const path = p.path.toLowerCase().replace(/\\/g, '/')
-          const index = projects.value.findIndex(p => p.path === path)
-          if (index !== -1) {
-              projects.value[index] = { ...p, path }
-          } else {
-              projects.value.push({ ...p, path })
+        const pData = data.project
+        const cleanPath = pData.path.toLowerCase().replace(/\\/g, '/')
+        const existing = projects.value.find(p => p.path === cleanPath)
+        
+        if (existing) {
+          // [v13.8] In-place deep update
+          Object.assign(existing, pData)
+          if (pData.process) {
+              existing.process = existing.process || { is_running: false, stats: null, has_error: false }
+              Object.assign(existing.process, pData.process)
           }
+        } else {
+          projects.value.push({ ...pData, path: cleanPath })
+        }
       } else if (data.type === 'system_stats') {
-          // [v12.0] Direct system stats update
-          // This will trigger globalMetrics re-computation automatically
+        if (data.system) {
+            totalSystemRamMb.value = data.system.ram_total_gb * 1024
+        }
       }
     }
 
@@ -220,7 +250,7 @@ export const useProjectStore = defineStore('project', () => {
   }
 
   async function discoverProjects(rootPath: string) {
-    const response = await fetch('http://127.0.0.1:8000/api/discover', { // Fixed Route
+    const response = await fetch('http://127.0.0.1:8000/api/discover', { 
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: rootPath })
@@ -244,7 +274,7 @@ export const useProjectStore = defineStore('project', () => {
   }
 
   async function addProject(path: string) {
-    const response = await fetch('http://127.0.0.1:8000/api/roots', { // Fixed Route (matches main.py POST /api/roots)
+    const response = await fetch('http://127.0.0.1:8000/api/roots', { 
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path })
@@ -261,19 +291,26 @@ export const useProjectStore = defineStore('project', () => {
 
   async function executeAction(action: string, path: string) {
     const normPath = path.toLowerCase().replace(/\\/g, '/')
+    
+    // Optimistic UI updates
     if (action === 'start.bat') {
         projectLogs.value[normPath] = []
     }
 
     if (action === 'stop') {
-        const index = projects.value.findIndex(p => p.path.toLowerCase() === path.toLowerCase())
+        const index = projects.value.findIndex(p => p.path === normPath)
         if (index !== -1) {
-            const project = { ...projects.value[index] }
-            if (project.process) {
-                project.process.is_running = false
-                project.process.stats = null
-                project.process.history = undefined
-                projects.value[index] = project as any
+            const existing = projects.value[index]
+            if (existing && existing.process) {
+                projects.value[index] = {
+                    ...existing,
+                    process: {
+                        ...existing.process,
+                        is_running: false,
+                        stats: null,
+                        history: undefined
+                    }
+                } as any
             }
         }
     }
@@ -281,7 +318,7 @@ export const useProjectStore = defineStore('project', () => {
     const response = await fetch('http://127.0.0.1:8000/api/projects/action', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, path })
+      body: JSON.stringify({ action, path: normPath })
     })
     if (!response.ok) throw new Error(await response.text())
   }
