@@ -15,12 +15,10 @@
   </p>
 </div>
 
-![TaskMancer Dashboard Preview]([TaskMancer Dashboard Interface Screenshot.jpg])
 <img width="2046" height="1222" alt="image" src="https://github.com/user-attachments/assets/4cd5e710-1443-42f6-ab1e-96657ddeb6f9" />
 <img width="2150" height="1162" alt="image" src="https://github.com/user-attachments/assets/1ebd0a69-4a65-403c-881e-c099ae586922" />
 <img width="1836" height="1033" alt="image" src="https://github.com/user-attachments/assets/229cf9c1-3a41-4069-a574-a705c655401c" />
 <img width="1967" height="1041" alt="image" src="https://github.com/user-attachments/assets/cb47db0f-2e2c-4b76-b17f-2a3ea1024943" />
-
 
 
 
