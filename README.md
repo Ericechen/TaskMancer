@@ -1,6 +1,4 @@
 <div align="center">
-  <img src="[Project Logo.png]" alt="TaskMancer Logo" width="120" />
-
   <h1>TaskMancer</h1>
 
   <p>
